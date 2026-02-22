@@ -394,6 +394,10 @@ export default function App() {
                         >
                           <option value="mitra">Mitra (Agent)</option>
                           <option value="admin">Administrator</option>
+                          <option value="msme">MSME Customer</option>
+                          <option value="nbfc">NBFC Partner</option>
+                          <option value="govt">Government Official</option>
+                          <option value="tech">Tech Admin</option>
                         </select>
                       </div>
                     )}
