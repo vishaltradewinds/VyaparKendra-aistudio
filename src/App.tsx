@@ -422,13 +422,18 @@ export default function App() {
     );
   }
 
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'services', label: 'Services', icon: Briefcase },
-    { id: 'requests', label: 'Requests', icon: Clock },
-    { id: 'loans', label: 'Loans', icon: HandCoins },
-    { id: 'ai', label: 'AI Assistant', icon: Bot },
-  ];
+  const getMenuItems = () => {
+    const items = [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'mitra', 'msme', 'nbfc', 'govt', 'tech'] },
+      { id: 'services', label: 'Services', icon: Briefcase, roles: ['admin', 'mitra', 'msme', 'tech'] },
+      { id: 'requests', label: 'Requests', icon: Clock, roles: ['mitra'] },
+      { id: 'loans', label: 'Loans', icon: HandCoins, roles: ['mitra', 'nbfc'] },
+      { id: 'ai', label: 'AI Assistant', icon: Bot, roles: ['admin', 'mitra', 'msme', 'nbfc', 'govt', 'tech'] },
+    ];
+    return items.filter(item => item.roles.includes(user?.role || 'mitra'));
+  };
+
+  const menuItems = getMenuItems();
 
   return (
     <div className="min-h-screen flex bg-slate-50">
