@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Bot,
   Send,
+  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { User, Service, ServiceRequest, Loan, Analytics } from "./types";
@@ -743,17 +744,14 @@ export default function App() {
                     </Card>
                     <Card className="flex items-center gap-4">
                       <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                        <TrendingUp size={24} />
+                        <FileText size={24} />
                       </div>
                       <div>
                         <p className="text-sm text-slate-500">
-                          Completed Today
+                          Loan Applications
                         </p>
                         <p className="text-2xl font-bold">
-                          {
-                            requests.filter((r) => r.status === "completed")
-                              .length
-                          }
+                          {loans.length}
                         </p>
                       </div>
                     </Card>
@@ -807,44 +805,49 @@ export default function App() {
                   <Card>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="font-bold text-slate-900">
-                        Popular Services
+                        Recent Loan Applications
                       </h3>
                       <button
-                        onClick={() => setView("services")}
+                        onClick={() => setView("loans")}
                         className="text-sm text-indigo-600 font-medium"
                       >
-                        Explore
+                        View all
                       </button>
                     </div>
                     <div className="space-y-4">
-                      {services.slice(0, 5).map((service) => (
+                      {loans.slice(0, 5).map((loan) => (
                         <div
-                          key={service.id}
+                          key={loan.id}
                           className="flex items-center justify-between p-3 rounded-lg border border-slate-100"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-600">
-                              <Briefcase size={16} />
+                              <FileText size={16} />
                             </div>
                             <div>
                               <p className="font-medium text-slate-900">
-                                {service.name}
+                                {loan.applicant}
                               </p>
                               <p className="text-xs text-slate-500">
-                                {service.category}
+                                {loan.purpose}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-emerald-600">
-                              ₹{service.commission}
+                            <p className="text-sm font-bold text-indigo-600">
+                              ₹{loan.amount.toLocaleString()}
                             </p>
                             <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                              Commission
+                              Amount
                             </p>
                           </div>
                         </div>
                       ))}
+                      {loans.length === 0 && (
+                        <p className="text-center py-8 text-slate-400">
+                          No loan applications found.
+                        </p>
+                      )}
                     </div>
                   </Card>
                 </div>
