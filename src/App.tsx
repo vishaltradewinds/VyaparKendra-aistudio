@@ -851,6 +851,40 @@ export default function App() {
                     </div>
                   </Card>
                 </div>
+
+                {user.role === "mitra" && (
+                  <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+                        <Bot size={24} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-lg">
+                          VyaparKendra AI Assistant
+                        </h3>
+                        <p className="text-slate-500 text-sm">
+                          Ask me about services, commissions, or how to grow your business.
+                        </p>
+                      </div>
+                    </div>
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      setView("ai");
+                      handleAiQuery(e);
+                    }} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        placeholder="e.g., What is the commission for PAN Card service?"
+                        className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <Button type="submit" disabled={loading || !aiInput.trim()}>
+                        <Send size={20} />
+                      </Button>
+                    </form>
+                  </Card>
+                )}
               </motion.div>
             )}
 
