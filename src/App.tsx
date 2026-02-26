@@ -20,11 +20,34 @@ import {
   Bot,
   Send,
   FileText,
+  Activity,
+  Cpu,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { User, Service, ServiceRequest, Loan, Analytics } from "./types";
 
 // --- Components ---
+
+const AllianceGlobalHeader = ({ activeVertical, setActiveVertical }: any) => (
+  <div className="bg-slate-900 text-slate-300 text-xs py-2 px-4 flex flex-col md:flex-row justify-between items-center z-[60] relative gap-2">
+    <div className="flex items-center gap-2">
+      <span className="font-bold text-white tracking-wider">ALLIANCEVENTURES</span>
+      <span className="opacity-50">|</span>
+      <span>Ecosystem</span>
+    </div>
+    <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 hide-scrollbar">
+      {Object.values(VERTICALS).map((v: any) => (
+        <button
+          key={v.id}
+          onClick={() => setActiveVertical(v.id)}
+          className={`whitespace-nowrap transition-colors font-medium ${activeVertical === v.id ? `text-${v.color}-400` : "hover:text-white"}`}
+        >
+          {v.name}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 const Button = ({
   children,
@@ -73,9 +96,126 @@ const Card = ({ children, className = "" }: any) => (
   </div>
 );
 
+const VERTICALS: Record<string, any> = {
+  vyaparkendra: {
+    id: "vyaparkendra",
+    name: "VyaparKendra",
+    tagline: "Empowering Digital India",
+    title: "Your Digital Storefront for",
+    highlight: "Every Essential Service",
+    desc: "Join 10,000+ Mitras providing banking, government, and digital services to their communities. Earn high commissions and grow your business.",
+    icon: Briefcase,
+    color: "indigo",
+    theme: {
+      bg: "bg-indigo-600",
+      bgHover: "hover:bg-indigo-700",
+      text: "text-indigo-600",
+      textHover: "hover:text-indigo-600",
+      lightBg: "bg-indigo-50",
+      lightText: "text-indigo-700",
+      border: "border-indigo-200",
+      ring: "focus:ring-indigo-500"
+    },
+    features: [
+      {
+        icon: Briefcase,
+        title: "200+ Services",
+        desc: "Offer PAN, Aadhaar, banking, and utility services from one dashboard.",
+      },
+      {
+        icon: Wallet,
+        title: "Instant Commissions",
+        desc: "Earn high margins on every transaction, credited instantly to your wallet.",
+      },
+      {
+        icon: Users,
+        title: "Community Impact",
+        desc: "Become the digital hub for your village or neighborhood.",
+      },
+    ]
+  },
+  rupaykg: {
+    id: "rupaykg",
+    name: "RupayKg",
+    tagline: "Sustainability Meets Commerce",
+    title: "Monetize Recyclables for a",
+    highlight: "Greener Tomorrow",
+    desc: "Turn waste into wealth. A digital platform connecting households, scrap dealers, and recyclers to streamline waste management and promote sustainability.",
+    icon: TrendingUp,
+    color: "emerald",
+    theme: {
+      bg: "bg-emerald-600",
+      bgHover: "hover:bg-emerald-700",
+      text: "text-emerald-600",
+      textHover: "hover:text-emerald-600",
+      lightBg: "bg-emerald-50",
+      lightText: "text-emerald-700",
+      border: "border-emerald-200",
+      ring: "focus:ring-emerald-500"
+    },
+    features: [
+      {
+        icon: HandCoins,
+        title: "Instant Payouts",
+        desc: "Get paid instantly for your recyclables directly into your bank account.",
+      },
+      {
+        icon: TrendingUp,
+        title: "Transparent Pricing",
+        desc: "Real-time market rates for all categories of scrap and recyclables.",
+      },
+      {
+        icon: Users,
+        title: "Network of Dealers",
+        desc: "Connect with verified scrap dealers in your local area.",
+      },
+    ]
+  },
+  ayushkendra: {
+    id: "ayushkendra",
+    name: "AyushKendra",
+    tagline: "Healthcare at Your Fingertips",
+    title: "Digital Healthcare for",
+    highlight: "Every Community",
+    desc: "Connect with doctors, order medicines, and book lab tests from the comfort of your local Mitra center.",
+    icon: Activity,
+    color: "rose",
+    theme: {
+      bg: "bg-rose-600",
+      bgHover: "hover:bg-rose-700",
+      text: "text-rose-600",
+      textHover: "hover:text-rose-600",
+      lightBg: "bg-rose-50",
+      lightText: "text-rose-700",
+      border: "border-rose-200",
+      ring: "focus:ring-rose-500"
+    },
+    features: [
+      {
+        icon: Activity,
+        title: "Telemedicine",
+        desc: "Consult with top doctors via video call instantly.",
+      },
+      {
+        icon: CheckCircle2,
+        title: "Pharmacy Delivery",
+        desc: "Order prescribed medicines to your doorstep at discounted rates.",
+      },
+      {
+        icon: Users,
+        title: "Family Insurance",
+        desc: "Affordable health coverage for you and your loved ones.",
+      },
+    ]
+  }
+};
+
 // --- Main App ---
 
 export default function App() {
+  const [activeVertical, setActiveVertical] = useState("vyaparkendra");
+  const verticalData = VERTICALS[activeVertical];
+
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [user, setUser] = useState<any>(
     JSON.parse(localStorage.getItem("user") || "null"),
@@ -276,15 +416,16 @@ export default function App() {
   if (!token) {
     return (
       <div className="min-h-screen bg-slate-50">
+        <AllianceGlobalHeader activeVertical={activeVertical} setActiveVertical={setActiveVertical} />
         {/* Public Header */}
-        <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <header className="fixed top-10 w-full z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-                <Briefcase size={20} />
+              <div className={`w-8 h-8 rounded-lg ${verticalData.theme.bg} flex items-center justify-center text-white`}>
+                <verticalData.icon size={20} />
               </div>
               <span className="text-xl font-bold text-slate-900">
-                VyaparKendra
+                {verticalData.name}
               </span>
             </div>
             <div className="flex items-center gap-4">
@@ -293,11 +434,12 @@ export default function App() {
                   setIsLogin(true);
                   setShowAuthModal(true);
                 }}
-                className="text-sm font-medium text-slate-600 hover:text-indigo-600"
+                className={`text-sm font-medium text-slate-600 ${verticalData.theme.textHover}`}
               >
                 Login
               </button>
               <Button
+                className={`${verticalData.theme.bg} ${verticalData.theme.bgHover}`}
                 onClick={() => {
                   setIsLogin(false);
                   setShowAuthModal(true);
@@ -310,28 +452,27 @@ export default function App() {
         </header>
 
         {/* Hero Section */}
-        <section className="pt-32 pb-20 px-4">
+        <section className="pt-40 pb-20 px-4">
           <div className="max-w-7xl mx-auto text-center">
             <motion.div
+              key={activeVertical}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <span className="px-4 py-1.5 bg-indigo-50 text-indigo-700 text-sm font-bold rounded-full mb-6 inline-block">
-                Empowering Digital India
+              <span className={`px-4 py-1.5 ${verticalData.theme.lightBg} ${verticalData.theme.lightText} text-sm font-bold rounded-full mb-6 inline-block`}>
+                {verticalData.tagline}
               </span>
               <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 mb-6 tracking-tight">
-                Your Digital Storefront for <br />
-                <span className="text-indigo-600">Every Essential Service</span>
+                {verticalData.title} <br />
+                <span className={`${verticalData.theme.text}`}>{verticalData.highlight}</span>
               </h1>
               <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-10">
-                Join 10,000+ Mitras providing banking, government, and digital
-                services to their communities. Earn high commissions and grow
-                your business.
+                {verticalData.desc}
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Button
-                  className="w-full sm:w-auto px-8 py-4 text-lg"
+                  className={`w-full sm:w-auto px-8 py-4 text-lg ${verticalData.theme.bg} ${verticalData.theme.bgHover}`}
                   onClick={() => {
                     setIsLogin(false);
                     setShowAuthModal(true);
@@ -339,7 +480,7 @@ export default function App() {
                 >
                   Start Your Journey
                 </Button>
-                <button className="flex items-center gap-2 text-slate-600 font-medium hover:text-indigo-600 transition-colors">
+                <button className={`flex items-center gap-2 text-slate-600 font-medium ${verticalData.theme.textHover} transition-colors`}>
                   Watch how it works <ChevronRight size={20} />
                 </button>
               </div>
@@ -360,32 +501,13 @@ export default function App() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                {
-                  icon: Briefcase,
-                  title: "100+ Digital Services",
-                  desc: "From PAN cards to utility bills, provide everything your customers need.",
-                  color: "bg-blue-50 text-blue-600",
-                },
-                {
-                  icon: HandCoins,
-                  title: "Loan Assistance",
-                  desc: "Help citizens secure business and personal loans with ease.",
-                  color: "bg-emerald-50 text-emerald-600",
-                },
-                {
-                  icon: Bot,
-                  title: "AI Business Support",
-                  desc: "Get instant answers and business growth tips from our AI assistant.",
-                  color: "bg-indigo-50 text-indigo-600",
-                },
-              ].map((feature, i) => (
+              {verticalData.features.map((feature: any, i: number) => (
                 <Card
                   key={i}
                   className="text-center hover:shadow-xl transition-shadow border-none bg-slate-50"
                 >
                   <div
-                    className={`w-16 h-16 rounded-2xl ${feature.color} flex items-center justify-center mx-auto mb-6`}
+                    className={`w-16 h-16 rounded-2xl ${verticalData.theme.lightBg} ${verticalData.theme.text} flex items-center justify-center mx-auto mb-6`}
                   >
                     <feature.icon size={32} />
                   </div>
@@ -410,7 +532,7 @@ export default function App() {
                 { label: "States Covered", value: "28" },
               ].map((stat, i) => (
                 <div key={i}>
-                  <p className="text-4xl font-extrabold text-indigo-600 mb-1">
+                  <p className={`text-4xl font-extrabold ${verticalData.theme.text} mb-1`}>
                     {stat.value}
                   </p>
                   <p className="text-slate-500 font-medium">{stat.label}</p>
@@ -424,13 +546,13 @@ export default function App() {
         <footer className="bg-slate-900 text-slate-400 py-12">
           <div className="max-w-7xl mx-auto px-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-6">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-                <Briefcase size={20} />
+              <div className={`w-8 h-8 rounded-lg ${verticalData.theme.bg} flex items-center justify-center text-white`}>
+                <verticalData.icon size={20} />
               </div>
-              <span className="text-xl font-bold text-white">VyaparKendra</span>
+              <span className="text-xl font-bold text-white">{verticalData.name}</span>
             </div>
             <p className="mb-8">
-              © 2026 VyaparKendra Enterprise. All rights reserved.
+              © 2026 {verticalData.name} Enterprise. Powered by <a href="#" className={`${verticalData.theme.text} hover:text-white transition-colors font-semibold`}>ALLIANCEVENTURES</a>. All rights reserved.
             </p>
             <div className="flex justify-center gap-6">
               <a href="#" className="hover:text-white transition-colors">
