@@ -239,13 +239,41 @@ app.get("/api/admin/analytics", auth(["admin"]), (req: any, res) => {
   res.json({ total_mitras: mitras.count, total_requests: requests.count, total_revenue: revenue.total || 0 });
 });
 
-app.post("/api/ai/query", async (req, res) => {
+app.post("/api/ai/query", auth(), async (req: any, res) => {
   const { question } = req.body;
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+    
+    // Fetch context data
+    const services = db.prepare("SELECT name, category, price, commission, processing_time FROM services").all();
+    
+    let userContext = `User Role: ${req.user.role}\nUser Name: ${req.user.name}\n`;
+    
+    if (req.user.role === 'mitra') {
+      const balance: any = db.prepare("SELECT SUM(amount) as balance FROM ledger WHERE mitra_id = ?").get(req.user.id);
+      const requests = db.prepare("SELECT r.citizen_name, s.name as service_name, r.status FROM requests r JOIN services s ON r.service_id = s.id WHERE r.mitra_id = ? LIMIT 5").all(req.user.id);
+      const loans = db.prepare("SELECT applicant, amount, purpose, status FROM loans WHERE mitra_id = ? LIMIT 5").all(req.user.id);
+      
+      userContext += `Wallet Balance: ₹${balance.balance || 0}\n`;
+      userContext += `Recent Requests: ${JSON.stringify(requests)}\n`;
+      userContext += `Recent Loans: ${JSON.stringify(loans)}\n`;
+    }
+
+    const systemInstruction = `You are the VyaparKendra AI Assistant. Help the user with their question about business, services, or loans. 
+You have access to the following system data:
+Available Services: ${JSON.stringify(services)}
+
+User Context:
+${userContext}
+
+Answer the user's question concisely and accurately based on this data.`;
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `You are the VyaparKendra AI Assistant. Help the user with their question about business, services, or loans. Question: ${question}`
+      contents: question,
+      config: {
+        systemInstruction: systemInstruction
+      }
     });
     res.json({ answer: response.text });
   } catch (e) {

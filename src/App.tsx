@@ -255,7 +255,10 @@ export default function App() {
     try {
       const res = await fetch("/api/ai/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ question: userMsg }),
       });
       const data = await res.json();
