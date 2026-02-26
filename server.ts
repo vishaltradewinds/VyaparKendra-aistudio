@@ -48,11 +48,6 @@ if (fs.existsSync("./private.pem") && fs.existsSync("./public.pem")) {
 // 2. DATABASE CONNECTIONS
 // =====================================================
 
-// MongoDB (Optional for Demo - prevents crashing if not available)
-mongoose.connect(MONGO_URI).catch(err => {
-  console.warn("MongoDB connection failed (Optional for demo). Using SQLite fallback.", err.message);
-});
-
 // SQLite (Primary Demo DB to ensure the UI works flawlessly without external setup)
 const db = new Database("vyaparkendra.db");
 
