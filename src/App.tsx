@@ -807,7 +807,7 @@ export default function App() {
                   )}
                 </div>
 
-                {user.role === "admin" ? (
+                {user.role === "admin" && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Card className="flex items-center gap-4">
                       <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -838,12 +838,14 @@ export default function App() {
                       <div>
                         <p className="text-sm text-slate-500">Total Revenue</p>
                         <p className="text-2xl font-bold">
-                          ₹{analytics?.total_revenue.toLocaleString() || 0}
+                          ₹{analytics?.total_revenue?.toLocaleString() || 0}
                         </p>
                       </div>
                     </Card>
                   </div>
-                ) : (
+                )}
+
+                {user.role === "mitra" && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Card className="flex items-center gap-4">
                       <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -883,6 +885,134 @@ export default function App() {
                         <p className="text-2xl font-bold">
                           {loans.length}
                         </p>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {user.role === "msme" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <HandCoins size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Active Loans</p>
+                        <p className="text-2xl font-bold">2</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                        <Clock size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Next EMI Date</p>
+                        <p className="text-2xl font-bold">12 Mar</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <TrendingUp size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Credit Score</p>
+                        <p className="text-2xl font-bold">745</p>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {user.role === "nbfc" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <IndianRupee size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Total Disbursed</p>
+                        <p className="text-2xl font-bold">₹4.2Cr</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <Users size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Active Borrowers</p>
+                        <p className="text-2xl font-bold">1,240</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                        <Activity size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">NPA Rate</p>
+                        <p className="text-2xl font-bold">1.2%</p>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {user.role === "govt" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <Users size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Citizens Served</p>
+                        <p className="text-2xl font-bold">45,200</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <Briefcase size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Active Schemes</p>
+                        <p className="text-2xl font-bold">12</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <IndianRupee size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Subsidy Disbursed</p>
+                        <p className="text-2xl font-bold">₹12.5Cr</p>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {user.role === "tech" && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <Activity size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">System Uptime</p>
+                        <p className="text-2xl font-bold">99.99%</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <Cpu size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">API Requests/min</p>
+                        <p className="text-2xl font-bold">4,250</p>
+                      </div>
+                    </Card>
+                    <Card className="flex items-center gap-4">
+                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <Users size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Active Users</p>
+                        <p className="text-2xl font-bold">12,400</p>
                       </div>
                     </Card>
                   </div>
