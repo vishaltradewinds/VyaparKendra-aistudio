@@ -28,7 +28,7 @@ import { User, Service, ServiceRequest, Loan, Analytics } from "./types";
 
 // --- Components ---
 
-const AllianceGlobalHeader = ({ activeVertical, setActiveVertical }: any) => (
+const AllianceGlobalHeader = ({ activeVertical }: any) => (
   <div className="bg-slate-900 text-slate-300 text-xs py-2 px-4 flex flex-col md:flex-row justify-between items-center z-[60] relative gap-2">
     <div className="flex items-center gap-2">
       <span className="font-bold text-white tracking-wider">ALLIANCEVENTURES</span>
@@ -37,13 +37,15 @@ const AllianceGlobalHeader = ({ activeVertical, setActiveVertical }: any) => (
     </div>
     <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 hide-scrollbar">
       {Object.values(VERTICALS).map((v: any) => (
-        <button
+        <a
           key={v.id}
-          onClick={() => setActiveVertical(v.id)}
+          href={v.url}
+          target="_blank"
+          rel="noopener noreferrer"
           className={`whitespace-nowrap transition-colors font-medium ${activeVertical === v.id ? `text-${v.color}-400` : "hover:text-white"}`}
         >
           {v.name}
-        </button>
+        </a>
       ))}
     </div>
   </div>
@@ -100,6 +102,7 @@ const VERTICALS: Record<string, any> = {
   vyaparkendra: {
     id: "vyaparkendra",
     name: "VyaparKendra",
+    url: "https://vyaparkendra.com",
     tagline: "Empowering Digital India",
     title: "Your Digital Storefront for",
     highlight: "Every Essential Service",
@@ -137,6 +140,7 @@ const VERTICALS: Record<string, any> = {
   rupaykg: {
     id: "rupaykg",
     name: "RupayKg",
+    url: "https://rupaykg.com",
     tagline: "Sustainability Meets Commerce",
     title: "Monetize Recyclables for a",
     highlight: "Greener Tomorrow",
@@ -174,6 +178,7 @@ const VERTICALS: Record<string, any> = {
   ayushkendra: {
     id: "ayushkendra",
     name: "AyushKendra",
+    url: "https://ayushkendra.com",
     tagline: "Healthcare at Your Fingertips",
     title: "Digital Healthcare for",
     highlight: "Every Community",
