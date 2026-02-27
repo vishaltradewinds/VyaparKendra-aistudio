@@ -47,4 +47,6 @@ export interface Analytics {
   total_mitras: number;
   total_requests: number;
   total_revenue: number;
+  franchise_revenue?: number;
+  active_regions?: number;
 }

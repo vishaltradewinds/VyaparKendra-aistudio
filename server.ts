@@ -58,7 +58,40 @@ db.exec(`
     email TEXT UNIQUE,
     password TEXT,
     role TEXT,
+    district TEXT,
     kyc_status TEXT DEFAULT 'pending'
+  );
+  CREATE TABLE IF NOT EXISTS wallets (
+    mitraId TEXT PRIMARY KEY,
+    balance REAL DEFAULT 0,
+    FOREIGN KEY(mitraId) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS ledger (
+    id TEXT PRIMARY KEY,
+    type TEXT,
+    debit TEXT,
+    credit TEXT,
+    amount REAL,
+    district TEXT,
+    gstAmount REAL DEFAULT 0,
+    tdsAmount REAL DEFAULT 0,
+    created_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS service_requests (
+    id TEXT PRIMARY KEY,
+    serviceCode TEXT,
+    mitraId TEXT,
+    price REAL,
+    status TEXT DEFAULT 'CREATED',
+    created_at TEXT,
+    FOREIGN KEY(mitraId) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    userId TEXT,
+    action TEXT,
+    role TEXT,
+    created_at TEXT
   );
   CREATE TABLE IF NOT EXISTS services (
     id TEXT PRIMARY KEY,
@@ -69,40 +102,10 @@ db.exec(`
     description TEXT,
     processing_time TEXT
   );
-  CREATE TABLE IF NOT EXISTS requests (
+  CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY,
-    mitra_id TEXT,
-    citizen_name TEXT,
-    citizen_phone TEXT,
-    id_number TEXT,
-    service_id TEXT,
-    status TEXT DEFAULT 'in_progress',
-    notes TEXT,
-    created_at TEXT,
-    FOREIGN KEY(mitra_id) REFERENCES users(id),
-    FOREIGN KEY(service_id) REFERENCES services(id)
-  );
-  CREATE TABLE IF NOT EXISTS ledger (
-    id TEXT PRIMARY KEY,
-    mitra_id TEXT,
-    amount REAL,
-    type TEXT,
-    reference TEXT,
-    created_at TEXT,
-    FOREIGN KEY(mitra_id) REFERENCES users(id)
-  );
-  CREATE TABLE IF NOT EXISTS loans (
-    id TEXT PRIMARY KEY,
-    mitra_id TEXT,
-    applicant TEXT,
-    phone TEXT,
-    amount REAL,
-    purpose TEXT,
-    tenure INTEGER,
-    income REAL,
-    status TEXT DEFAULT 'submitted',
-    created_at TEXT,
-    FOREIGN KEY(mitra_id) REFERENCES users(id)
+    name TEXT UNIQUE,
+    description TEXT
   );
 `);
 
@@ -146,92 +149,122 @@ app.get("/internal/metrics", (req, res) => {
   res.json({ msmeOnboarded: 8700, creditScoresGenerated: 6300, totalRevenue: 18000000 });
 });
 
-// --- Frontend App Routes ---
-app.post("/api/register", async (req, res) => {
-  const { name, email, password, role } = req.body;
+// --- Auth Routes ---
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password, role, district } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   const id = Math.random().toString(36).substr(2, 9);
   try {
-    db.prepare("INSERT INTO users (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, role);
-    res.json({ message: "Registration successful" });
+    db.prepare("INSERT INTO users (id, name, email, password, role, district) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, role, district);
+    res.json({ message: "Registration successful", user: { id, name, email, role, district } });
   } catch (e) {
     res.status(400).json({ error: "Email already exists" });
   }
 });
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
   const user: any = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(400).json({ error: "Invalid credentials" });
   }
   
-  // Sign token using RS256 and the private key
-  const token = jwt.sign({ id: user.id, role: user.role, name: user.name }, privateKey, { algorithm: "RS256", expiresIn: "12h" });
-  res.json({ access_token: token, role: user.role, name: user.name });
+  const token = jwt.sign({ id: user.id, role: user.role, district: user.district }, privateKey, { algorithm: "RS256", expiresIn: "1d" });
+  res.json({ token, role: user.role });
 });
 
-app.get("/api/services", (req, res) => {
+// --- Wallet Routes ---
+app.post("/api/wallet/recharge", auth(["admin"]), (req: any, res) => {
+  const { mitraId, amount } = req.body;
+  
+  const wallet: any = db.prepare("SELECT * FROM wallets WHERE mitraId = ?").get(mitraId);
+  if (wallet) {
+    db.prepare("UPDATE wallets SET balance = balance + ? WHERE mitraId = ?").run(amount, mitraId);
+  } else {
+    db.prepare("INSERT INTO wallets (mitraId, balance) VALUES (?, ?)").run(mitraId, amount);
+  }
+
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount) VALUES (?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "RECHARGE", "BANK", "MITRA_WALLET", amount
+  );
+
+  res.json("Wallet Credited");
+});
+
+// --- Commission Engine ---
+const calculateFranchiseCommission = (district: string, amount: number) => {
+  const rate = 0.1;
+  const commission = amount * rate;
+
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district
+  );
+
+  return commission;
+};
+
+// --- Service Routes ---
+app.get("/api/services", (req: any, res) => {
   const services = db.prepare("SELECT * FROM services").all();
   res.json(services);
 });
 
-app.post("/api/admin/services", auth(["admin"]), (req: any, res) => {
-  const { name, category, price, commission, description, processing_time } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
-  db.prepare("INSERT INTO services (id, name, category, price, commission, description, processing_time) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, name, category, price, commission, description, processing_time);
-  res.json({ message: "Service added" });
+app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
+  const { serviceCode, price } = req.body;
+
+  const wallet: any = db.prepare("SELECT * FROM wallets WHERE mitraId = ?").get(req.user.id);
+  if (!wallet || wallet.balance < price) {
+    return res.status(400).json("Insufficient balance");
+  }
+
+  db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
+
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district
+  );
+
+  calculateFranchiseCommission(req.user.district, price);
+
+  db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
+  );
+
+  res.json("Service Created");
 });
 
-app.post("/api/mitra/requests", auth(["mitra"]), (req: any, res) => {
-  const { citizen_name, citizen_phone, id_number, service_id, notes } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
-  db.prepare("INSERT INTO requests (id, mitra_id, citizen_name, citizen_phone, id_number, service_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(id, req.user.id, citizen_name, citizen_phone, id_number, service_id, notes, new Date().toISOString());
-  res.json({ message: "Request created" });
+// --- Dashboard Routes ---
+app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
+  const users = db.prepare("SELECT COUNT(*) as count FROM users").get();
+  const revenue = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE credit = 'PLATFORM_REVENUE'").get();
+  res.json({ totalUsers: (users as any).count, platformRevenue: (revenue as any).total || 0 });
 });
 
-app.get("/api/mitra/requests", auth(["mitra"]), (req: any, res) => {
-  const requests = db.prepare("SELECT r.*, s.name as service_name, s.commission FROM requests r JOIN services s ON r.service_id = s.id WHERE r.mitra_id = ?").all(req.user.id);
-  res.json(requests);
+app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
+  const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
+  const requests = db.prepare("SELECT * FROM service_requests WHERE mitraId = ?").all(req.user.id);
+  res.json({ balance: wallet?.balance || 0, requests });
 });
 
-app.post("/api/mitra/requests/:id/complete", auth(["mitra"]), (req: any, res) => {
-  const { id } = req.params;
-  const request: any = db.prepare("SELECT * FROM requests WHERE id = ? AND mitra_id = ?").get(id, req.user.id);
-  if (!request) return res.sendStatus(404);
-  
-  const service: any = db.prepare("SELECT commission FROM services WHERE id = ?").get(request.service_id);
-  
-  db.transaction(() => {
-    db.prepare("UPDATE requests SET status = 'completed' WHERE id = ?").run(id);
-    db.prepare("INSERT INTO ledger (id, mitra_id, amount, type, reference, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(Math.random().toString(36).substr(2, 9), req.user.id, service.commission, 'credit', id, new Date().toISOString());
-  })();
-  
-  res.json({ message: "Completed and commission credited" });
+app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
+  const commission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ?").get(req.user.district);
+  const mitras = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND district = ?").get(req.user.district);
+  res.json({ totalCommission: (commission as any).total || 0, totalMitras: (mitras as any).count });
 });
 
-app.get("/api/mitra/wallet", auth(["mitra"]), (req: any, res) => {
-  const balance: any = db.prepare("SELECT SUM(amount) as balance FROM ledger WHERE mitra_id = ?").get(req.user.id);
-  res.json({ balance: balance.balance || 0 });
+app.get("/api/dashboard/ca", auth(["ca"]), (req: any, res) => {
+  const requests = db.prepare("SELECT * FROM service_requests WHERE serviceCode LIKE '%TAX%' OR serviceCode LIKE '%GST%'").all();
+  res.json({ pendingTaxRequests: requests.length });
 });
 
-app.post("/api/loans", auth(["mitra"]), (req: any, res) => {
-  const { applicant, phone, amount, purpose, tenure, income } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
-  db.prepare("INSERT INTO loans (id, mitra_id, applicant, phone, amount, purpose, tenure, income, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, req.user.id, applicant, phone, amount, purpose, tenure, income, new Date().toISOString());
-  res.json({ message: "Loan application submitted" });
+app.get("/api/dashboard/compliance", auth(["compliance"]), (req: any, res) => {
+  const pendingKyc = db.prepare("SELECT COUNT(*) as count FROM users WHERE kyc_status = 'pending'").get();
+  res.json({ pendingKyc: (pendingKyc as any).count });
 });
 
-app.get("/api/loans", auth(["mitra"]), (req: any, res) => {
-  const loans = db.prepare("SELECT * FROM loans WHERE mitra_id = ?").all(req.user.id);
-  res.json(loans);
-});
-
-app.get("/api/admin/analytics", auth(["admin"]), (req: any, res) => {
-  const mitras: any = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra'").get();
-  const requests: any = db.prepare("SELECT COUNT(*) as count FROM requests").get();
-  const revenue: any = db.prepare("SELECT SUM(amount) as total FROM ledger").get();
-  res.json({ total_mitras: mitras.count, total_requests: requests.count, total_revenue: revenue.total || 0 });
+app.get("/api/dashboard/investor", auth(["investor"]), (req: any, res) => {
+  const revenue = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE credit = 'PLATFORM_REVENUE'").get();
+  const growth = 15; // Mock growth %
+  res.json({ totalRevenue: (revenue as any).total || 0, monthOverMonthGrowth: growth });
 });
 
 app.post("/api/ai/query", auth(), async (req: any, res) => {
