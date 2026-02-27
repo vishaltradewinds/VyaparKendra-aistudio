@@ -9,6 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
+import { servicesSeedData } from "./seedData.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -107,7 +108,29 @@ db.exec(`
     name TEXT UNIQUE,
     description TEXT
   );
+  CREATE TABLE IF NOT EXISTS loans (
+    id TEXT PRIMARY KEY,
+    mitra_id TEXT,
+    applicant TEXT,
+    amount REAL,
+    purpose TEXT,
+    status TEXT DEFAULT 'PENDING',
+    created_at TEXT
+  );
 `);
+
+// Seed Services Data
+const existingServices = db.prepare("SELECT COUNT(*) as count FROM services").get() as any;
+if (existingServices.count === 0) {
+  const insertService = db.prepare("INSERT INTO services (id, name, category, price, commission, description, processing_time) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  const insertMany = db.transaction((services) => {
+    for (const s of services) {
+      insertService.run(Math.random().toString(36).substr(2, 9), s.name, s.category, s.price, s.commission, s.description, s.processing_time);
+    }
+  });
+  insertMany(servicesSeedData);
+  console.log("Seeded services data.");
+}
 
 // =====================================================
 // 3. AUTH MIDDLEWARE (RS256)
@@ -247,8 +270,29 @@ app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
 
 app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
   const commission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ?").get(req.user.district);
-  const mitras = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND district = ?").get(req.user.district);
-  res.json({ totalCommission: (commission as any).total || 0, totalMitras: (mitras as any).count });
+  const mitrasCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND district = ?").get(req.user.district);
+  
+  const mitras = db.prepare("SELECT id, name, email, kyc_status FROM users WHERE role = 'mitra' AND district = ?").all(req.user.district);
+  const recentCommissions = db.prepare("SELECT * FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ? ORDER BY created_at DESC LIMIT 10").all(req.user.district);
+  
+  const regionalPerformance = db.prepare(`
+    SELECT COUNT(sr.id) as totalRequests, SUM(sr.price) as totalVolume
+    FROM service_requests sr
+    JOIN users u ON sr.mitraId = u.id
+    WHERE u.district = ?
+  `).get(req.user.district);
+
+  res.json({ 
+    totalCommission: (commission as any).total || 0, 
+    totalMitras: (mitrasCount as any).count,
+    mitras,
+    recentCommissions,
+    regionalPerformance: {
+      totalRequests: (regionalPerformance as any).totalRequests || 0,
+      totalVolume: (regionalPerformance as any).totalVolume || 0
+    },
+    district: req.user.district
+  });
 });
 
 app.get("/api/dashboard/ca", auth(["ca"]), (req: any, res) => {
@@ -278,11 +322,11 @@ app.post("/api/ai/query", auth(), async (req: any, res) => {
     let userContext = `User Role: ${req.user.role}\nUser Name: ${req.user.name}\n`;
     
     if (req.user.role === 'mitra') {
-      const balance: any = db.prepare("SELECT SUM(amount) as balance FROM ledger WHERE mitra_id = ?").get(req.user.id);
-      const requests = db.prepare("SELECT r.citizen_name, s.name as service_name, r.status FROM requests r JOIN services s ON r.service_id = s.id WHERE r.mitra_id = ? LIMIT 5").all(req.user.id);
+      const balance: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
+      const requests = db.prepare("SELECT serviceCode, status, created_at FROM service_requests WHERE mitraId = ? LIMIT 5").all(req.user.id);
       const loans = db.prepare("SELECT applicant, amount, purpose, status FROM loans WHERE mitra_id = ? LIMIT 5").all(req.user.id);
       
-      userContext += `Wallet Balance: ₹${balance.balance || 0}\n`;
+      userContext += `Wallet Balance: ₹${balance?.balance || 0}\n`;
       userContext += `Recent Requests: ${JSON.stringify(requests)}\n`;
       userContext += `Recent Loans: ${JSON.stringify(loans)}\n`;
     }
@@ -300,10 +344,83 @@ Answer the user's question concisely and accurately based on this data.`;
       model: "gemini-3-flash-preview",
       contents: question,
       config: {
-        systemInstruction: systemInstruction
+        systemInstruction: systemInstruction,
+        tools: [{
+          functionDeclarations: [
+            {
+              name: "checkWalletBalance",
+              description: "Check the current wallet balance of the user.",
+              parameters: {
+                type: "OBJECT",
+                properties: {},
+              }
+            },
+            {
+              name: "createServiceRequest",
+              description: "Create a new service request for a citizen.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  serviceCode: { type: "STRING", description: "The name or code of the service to request." },
+                  price: { type: "NUMBER", description: "The price of the service." }
+                },
+                required: ["serviceCode", "price"]
+              }
+            },
+            {
+              name: "applyForLoan",
+              description: "Apply for a new loan.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  applicantName: { type: "STRING", description: "Name of the applicant." },
+                  amount: { type: "NUMBER", description: "Loan amount requested." },
+                  purpose: { type: "STRING", description: "Purpose of the loan." }
+                },
+                required: ["applicantName", "amount", "purpose"]
+              }
+            }
+          ]
+        }]
       }
     });
-    res.json({ answer: response.text });
+
+    let answer = response.text;
+    
+    if (response.functionCalls && response.functionCalls.length > 0) {
+      const call = response.functionCalls[0];
+      if (call.name === "checkWalletBalance") {
+        const balance: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
+        answer = `Your current wallet balance is ₹${balance?.balance || 0}.`;
+      } else if (call.name === "createServiceRequest") {
+        const { serviceCode, price } = call.args as any;
+        const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
+        if (!wallet || wallet.balance < price) {
+          answer = `You have insufficient balance to create a request for ${serviceCode}. It costs ₹${price}, but your balance is ₹${wallet?.balance || 0}.`;
+        } else {
+          db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
+          
+          db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
+            Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district
+          );
+
+          calculateFranchiseCommission(req.user.district, price);
+
+          db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
+            Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
+          );
+          answer = `Successfully created a service request for ${serviceCode}. ₹${price} has been deducted from your wallet.`;
+        }
+      } else if (call.name === "applyForLoan") {
+        const { applicantName, amount, purpose } = call.args as any;
+        db.prepare("INSERT INTO loans (id, mitra_id, applicant, amount, purpose, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+          Math.random().toString(36).substr(2, 9), req.user.id, applicantName, amount, purpose, new Date().toISOString()
+        );
+        answer = `Successfully submitted a loan application for ${applicantName} for ₹${amount} (${purpose}).`;
+      }
+    }
+
+    res.json({ answer });
   } catch (e) {
     console.error(e);
     res.json({ answer: "I'm sorry, I'm having trouble connecting to my brain right now. Please try again later." });

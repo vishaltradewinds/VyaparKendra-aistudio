@@ -90,17 +90,6 @@ export default function Services() {
                     {service.description || "No description available."}
                   </p>
                 </div>
-                
-                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Price</p>
-                    <p className="text-lg font-bold text-slate-900">₹{service.price}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Processing</p>
-                    <p className="text-sm font-medium text-slate-700">{service.processing_time || "Standard"}</p>
-                  </div>
-                </div>
               </motion.div>
             ))}
             
