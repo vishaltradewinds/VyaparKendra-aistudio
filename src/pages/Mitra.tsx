@@ -15,7 +15,12 @@ export default function Mitra() {
     if (!token) return navigate("/");
     
     axios.get("/api/dashboard/mitra", { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => setData(res.data))
+      .then(res => {
+        if (res.data.onboarding_step < 3) {
+          navigate("/onboarding");
+        }
+        setData(res.data);
+      })
       .catch(() => navigate("/"));
   };
 

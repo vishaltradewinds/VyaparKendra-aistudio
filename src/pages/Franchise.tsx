@@ -8,12 +8,18 @@ export default function Franchise() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return navigate("/");
-    
-    axios.get("/api/dashboard/franchise", { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => setData(res.data))
-      .catch(() => navigate("/"));
+    const fetchData = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return navigate("/");
+      
+      try {
+        const res = await axios.get("/api/dashboard/franchise", { headers: { Authorization: `Bearer ${token}` } });
+        setData(res.data);
+      } catch (err) {
+        navigate("/");
+      }
+    };
+    fetchData();
   }, [navigate]);
 
   if (!data) return (

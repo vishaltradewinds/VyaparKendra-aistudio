@@ -9,6 +9,7 @@ import CA from "./pages/CA";
 import Compliance from "./pages/Compliance";
 import Investor from "./pages/Investor";
 import Services from "./pages/Services";
+import MitraOnboarding from "./pages/MitraOnboarding";
 
 // Placeholder component for Forgot Password
 const ForgotPassword = () => (
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/services" element={<Services />} />
+        <Route path="/onboarding" element={<MitraOnboarding />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/mitra" element={<Mitra />} />
         <Route path="/franchise" element={<Franchise />} />

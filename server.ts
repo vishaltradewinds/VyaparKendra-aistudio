@@ -5,7 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import Database from "better-sqlite3";
 import bcrypt from "bcryptjs";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -60,7 +60,29 @@ db.exec(`
     password TEXT,
     role TEXT,
     district TEXT,
-    kyc_status TEXT DEFAULT 'pending'
+    kyc_status TEXT DEFAULT 'pending',
+    onboarding_step INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS training_modules (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    description TEXT,
+    video_url TEXT,
+    duration TEXT,
+    order_index INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS user_training_progress (
+    userId TEXT,
+    moduleId TEXT,
+    completed INTEGER DEFAULT 0,
+    PRIMARY KEY(userId, moduleId)
+  );
+  CREATE TABLE IF NOT EXISTS mitra_documents (
+    id TEXT PRIMARY KEY,
+    mitraId TEXT,
+    docType TEXT,
+    status TEXT DEFAULT 'PENDING',
+    uploaded_at TEXT
   );
   CREATE TABLE IF NOT EXISTS wallets (
     mitraId TEXT PRIMARY KEY,
@@ -132,6 +154,20 @@ if (existingServices.count === 0) {
   console.log("Seeded services data.");
 }
 
+// Seed Training Modules
+const existingModules = db.prepare("SELECT COUNT(*) as count FROM training_modules").get() as any;
+if (existingModules.count === 0) {
+  const modules = [
+    { id: "m1", title: "Introduction to VyaparKendra", description: "Learn about our mission and the services you can offer.", duration: "10 mins", order_index: 1 },
+    { id: "m2", title: "Using the Mitra Dashboard", description: "A complete walkthrough of your dashboard and wallet management.", duration: "15 mins", order_index: 2 },
+    { id: "m3", title: "Compliance & Ethics", description: "Understanding the legal requirements and ethical standards for digital services.", duration: "20 mins", order_index: 3 },
+    { id: "m4", title: "Customer Support Best Practices", description: "How to handle customer queries and provide excellent service.", duration: "12 mins", order_index: 4 }
+  ];
+  const insert = db.prepare("INSERT INTO training_modules (id, title, description, duration, order_index) VALUES (?, ?, ?, ?, ?)");
+  modules.forEach(m => insert.run(m.id, m.title, m.description, m.duration, m.order_index));
+  console.log("Seeded training modules.");
+}
+
 // =====================================================
 // 3. AUTH MIDDLEWARE (RS256)
 // =====================================================
@@ -193,7 +229,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
   
   const token = jwt.sign({ id: user.id, role: user.role, district: user.district }, privateKey, { algorithm: "RS256", expiresIn: "1d" });
-  res.json({ token, role: user.role });
+  res.json({ token, role: user.role, onboarding_step: user.onboarding_step });
 });
 
 // --- Wallet Routes ---
@@ -263,9 +299,63 @@ app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
 });
 
 app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
+  const user = db.prepare("SELECT onboarding_step, kyc_status FROM users WHERE id = ?").get(req.user.id) as any;
   const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
   const requests = db.prepare("SELECT * FROM service_requests WHERE mitraId = ?").all(req.user.id);
-  res.json({ balance: wallet?.balance || 0, requests });
+  res.json({ balance: wallet?.balance || 0, requests, onboarding_step: user.onboarding_step, kyc_status: user.kyc_status });
+});
+
+app.get("/api/onboarding/status", auth(["mitra"]), (req: any, res) => {
+  const user = db.prepare("SELECT onboarding_step, kyc_status FROM users WHERE id = ?").get(req.user.id) as any;
+  const docs = db.prepare("SELECT * FROM mitra_documents WHERE mitraId = ?").all(req.user.id);
+  const training = db.prepare(`
+    SELECT tm.*, COALESCE(utp.completed, 0) as completed 
+    FROM training_modules tm 
+    LEFT JOIN user_training_progress utp ON tm.id = utp.moduleId AND utp.userId = ?
+    ORDER BY tm.order_index
+  `).all(req.user.id);
+  res.json({ onboarding_step: user.onboarding_step, kyc_status: user.kyc_status, documents: docs, training });
+});
+
+app.post("/api/onboarding/upload", auth(["mitra"]), (req: any, res) => {
+  const { docType } = req.body;
+  const id = Math.random().toString(36).substr(2, 9);
+  db.prepare("INSERT INTO mitra_documents (id, mitraId, docType, status, uploaded_at) VALUES (?, ?, ?, 'PENDING', ?)").run(
+    id, req.user.id, docType, new Date().toISOString()
+  );
+  
+  // Check if all required docs are uploaded to advance step
+  const docs = db.prepare("SELECT docType FROM mitra_documents WHERE mitraId = ?").all(req.user.id) as any[];
+  const required = ["AADHAAR", "PAN", "SHOP_PHOTO"];
+  const hasAll = required.every(r => docs.some(d => d.docType === r));
+  
+  if (hasAll) {
+    db.prepare("UPDATE users SET onboarding_step = 1 WHERE id = ? AND onboarding_step = 0").run(req.user.id);
+  }
+  
+  res.json({ message: "Document uploaded successfully", id });
+});
+
+app.post("/api/onboarding/complete-training", auth(["mitra"]), (req: any, res) => {
+  const { moduleId } = req.body;
+  db.prepare("INSERT OR REPLACE INTO user_training_progress (userId, moduleId, completed) VALUES (?, ?, 1)").run(
+    req.user.id, moduleId
+  );
+  
+  // Check if all training is complete to advance step
+  const total = db.prepare("SELECT COUNT(*) as count FROM training_modules").get() as any;
+  const completed = db.prepare("SELECT COUNT(*) as count FROM user_training_progress WHERE userId = ? AND completed = 1").get(req.user.id) as any;
+  
+  if (completed.count >= total.count) {
+    db.prepare("UPDATE users SET onboarding_step = 2 WHERE id = ? AND onboarding_step = 1").run(req.user.id);
+  }
+  
+  res.json({ message: "Training module completed" });
+});
+
+app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
+  db.prepare("UPDATE users SET onboarding_step = 3, kyc_status = 'pending' WHERE id = ?").run(req.user.id);
+  res.json({ message: "Onboarding submitted for review" });
 });
 
 app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
@@ -351,7 +441,7 @@ Answer the user's question concisely and accurately based on this data.`;
               name: "checkWalletBalance",
               description: "Check the current wallet balance of the user.",
               parameters: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {},
               }
             },
@@ -359,10 +449,10 @@ Answer the user's question concisely and accurately based on this data.`;
               name: "createServiceRequest",
               description: "Create a new service request for a citizen.",
               parameters: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  serviceCode: { type: "STRING", description: "The name or code of the service to request." },
-                  price: { type: "NUMBER", description: "The price of the service." }
+                  serviceCode: { type: Type.STRING, description: "The name or code of the service to request." },
+                  price: { type: Type.NUMBER, description: "The price of the service." }
                 },
                 required: ["serviceCode", "price"]
               }
@@ -371,11 +461,11 @@ Answer the user's question concisely and accurately based on this data.`;
               name: "applyForLoan",
               description: "Apply for a new loan.",
               parameters: {
-                type: "OBJECT",
+                type: Type.OBJECT,
                 properties: {
-                  applicantName: { type: "STRING", description: "Name of the applicant." },
-                  amount: { type: "NUMBER", description: "Loan amount requested." },
-                  purpose: { type: "STRING", description: "Purpose of the loan." }
+                  applicantName: { type: Type.STRING, description: "Name of the applicant." },
+                  amount: { type: Type.NUMBER, description: "Loan amount requested." },
+                  purpose: { type: Type.STRING, description: "Purpose of the loan." }
                 },
                 required: ["applicantName", "amount", "purpose"]
               }

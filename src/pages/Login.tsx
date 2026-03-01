@@ -20,7 +20,12 @@ export default function Login() {
         const res = await axios.post("/api/auth/login", { email, password });
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("role", res.data.role);
-        navigate(`/${res.data.role}`);
+        
+        if (res.data.role === "mitra" && res.data.onboarding_step < 3) {
+          navigate("/onboarding");
+        } else {
+          navigate(`/${res.data.role}`);
+        }
       } else {
         await axios.post("/api/auth/register", { name, email, password, role, district });
         setIsLogin(true);
