@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("mitra");
   const [district, setDistrict] = useState("");
+  const [referredBy, setReferredBy] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -27,7 +28,7 @@ export default function Login() {
           navigate(`/${res.data.role}`);
         }
       } else {
-        await axios.post("/api/auth/register", { name, email, password, role, district });
+        await axios.post("/api/auth/register", { name, email, password, role, district, referredBy });
         setIsLogin(true);
         alert("Registration successful. Please login.");
       }
@@ -129,6 +130,18 @@ export default function Login() {
                     required
                   />
                 </div>
+                {role === "mitra" && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Referral Code (Optional)</label>
+                    <input
+                      type="text"
+                      value={referredBy}
+                      onChange={(e) => setReferredBy(e.target.value)}
+                      placeholder="Enter Franchise ID"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 ease-in-out focus:-translate-y-0.5 focus:shadow-sm"
+                    />
+                  </div>
+                )}
               </>
             )}
             <button

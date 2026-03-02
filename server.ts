@@ -61,7 +61,9 @@ db.exec(`
     role TEXT,
     district TEXT,
     kyc_status TEXT DEFAULT 'pending',
-    onboarding_step INTEGER DEFAULT 0
+    onboarding_step INTEGER DEFAULT 0,
+    referred_by TEXT,
+    FOREIGN KEY(referred_by) REFERENCES users(id)
   );
   CREATE TABLE IF NOT EXISTS training_modules (
     id TEXT PRIMARY KEY,
@@ -210,11 +212,11 @@ app.get("/internal/metrics", (req, res) => {
 
 // --- Auth Routes ---
 app.post("/api/auth/register", async (req, res) => {
-  const { name, email, password, role, district } = req.body;
+  const { name, email, password, role, district, referredBy } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   const id = Math.random().toString(36).substr(2, 9);
   try {
-    db.prepare("INSERT INTO users (id, name, email, password, role, district) VALUES (?, ?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, role, district);
+    db.prepare("INSERT INTO users (id, name, email, password, role, district, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, role, district, referredBy || null);
     res.json({ message: "Registration successful", user: { id, name, email, role, district } });
   } catch (e) {
     res.status(400).json({ error: "Email already exists" });
@@ -354,16 +356,39 @@ app.post("/api/onboarding/complete-training", auth(["mitra"]), (req: any, res) =
 });
 
 app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
-  db.prepare("UPDATE users SET onboarding_step = 3, kyc_status = 'pending' WHERE id = ?").run(req.user.id);
+  const user = db.prepare("SELECT referred_by, onboarding_step FROM users WHERE id = ?").get(req.user.id) as any;
+  
+  if (user && user.onboarding_step < 3) {
+    db.prepare("UPDATE users SET onboarding_step = 3, kyc_status = 'pending' WHERE id = ?").run(req.user.id);
+    
+    // Award referral bonus if referred by a franchise
+    if (user.referred_by) {
+      const referrer = db.prepare("SELECT role, district FROM users WHERE id = ?").get(user.referred_by) as any;
+      if (referrer && referrer.role === 'franchise') {
+        const bonusAmount = 500;
+        db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+          Math.random().toString(36).substr(2, 9), 
+          "REFERRAL_BONUS", 
+          "SYSTEM", 
+          "FRANCHISE_COMMISSION", 
+          bonusAmount, 
+          referrer.district,
+          new Date().toISOString()
+        );
+      }
+    }
+  }
   res.json({ message: "Onboarding submitted for review" });
 });
 
 app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
   const commission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ?").get(req.user.district);
+  const referralBonuses = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'REFERRAL_BONUS' AND district = ?").get(req.user.district);
   const mitrasCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND district = ?").get(req.user.district);
+  const referredMitrasCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND referred_by = ?").get(req.user.id);
   
-  const mitras = db.prepare("SELECT id, name, email, kyc_status FROM users WHERE role = 'mitra' AND district = ?").all(req.user.district);
-  const recentCommissions = db.prepare("SELECT * FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ? ORDER BY created_at DESC LIMIT 10").all(req.user.district);
+  const mitras = db.prepare("SELECT id, name, email, kyc_status, onboarding_step FROM users WHERE role = 'mitra' AND district = ?").all(req.user.district);
+  const recentCommissions = db.prepare("SELECT * FROM ledger WHERE (type = 'FRANCHISE_COMMISSION' OR type = 'REFERRAL_BONUS') AND district = ? ORDER BY created_at DESC LIMIT 10").all(req.user.district);
   
   const regionalPerformance = db.prepare(`
     SELECT COUNT(sr.id) as totalRequests, SUM(sr.price) as totalVolume
@@ -374,14 +399,17 @@ app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
 
   res.json({ 
     totalCommission: (commission as any).total || 0, 
+    referralBonuses: (referralBonuses as any).total || 0,
     totalMitras: (mitrasCount as any).count,
+    referredMitras: (referredMitrasCount as any).count,
     mitras,
     recentCommissions,
     regionalPerformance: {
       totalRequests: (regionalPerformance as any).totalRequests || 0,
       totalVolume: (regionalPerformance as any).totalVolume || 0
     },
-    district: req.user.district
+    district: req.user.district,
+    franchiseId: req.user.id
   });
 });
 

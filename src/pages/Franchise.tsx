@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock } from "lucide-react";
+import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy } from "lucide-react";
 
 export default function Franchise() {
   const [data, setData] = useState<any>(null);
@@ -66,7 +66,7 @@ export default function Franchise() {
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -75,6 +75,16 @@ export default function Franchise() {
               <h2 className="text-slate-500 text-sm font-medium">Total Commission</h2>
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-auto">₹{data.totalCommission.toLocaleString()}</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                <Gift size={20} />
+              </div>
+              <h2 className="text-slate-500 text-sm font-medium">Referral Bonuses</h2>
+            </div>
+            <p className="text-3xl font-bold text-slate-900 mt-auto">₹{data.referralBonuses.toLocaleString()}</p>
           </div>
           
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
@@ -105,6 +115,29 @@ export default function Franchise() {
               <h2 className="text-slate-500 text-sm font-medium">Regional Volume</h2>
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-auto">₹{data.regionalPerformance.totalVolume.toLocaleString()}</p>
+          </div>
+        </div>
+
+        {/* Referral Section */}
+        <div className="mb-8 bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-indigo-100">
+          <div className="max-w-md">
+            <h2 className="text-2xl font-bold mb-2">Grow Your Network</h2>
+            <p className="text-indigo-100">Share your referral code with new Mitras and earn <span className="font-bold text-white">₹500</span> for every successful onboarding.</p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm border border-white/20 p-5 rounded-2xl flex items-center gap-6 w-full md:w-auto">
+            <div>
+              <p className="text-xs text-indigo-200 uppercase font-bold tracking-wider mb-1">Your Referral Code</p>
+              <p className="text-3xl font-mono font-bold">{data.franchiseId}</p>
+            </div>
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(data.franchiseId);
+                alert("Referral code copied!");
+              }}
+              className="p-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all shadow-lg active:scale-95"
+            >
+              <Copy size={24} />
+            </button>
           </div>
         </div>
 
@@ -170,7 +203,9 @@ export default function Franchise() {
                         +
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900 text-sm">Commission Earned</p>
+                        <p className="font-medium text-slate-900 text-sm">
+                          {comm.type === 'REFERRAL_BONUS' ? 'Referral Bonus' : 'Commission Earned'}
+                        </p>
                         <p className="text-xs text-slate-500">{new Date(comm.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
