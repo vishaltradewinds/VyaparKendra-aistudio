@@ -3,8 +3,11 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy } from "lucide-react";
 import { List } from "react-window";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "../components/LanguageSelector";
 
 export default function Franchise() {
+  const { t } = useTranslation();
   const [data, setData] = useState<any>(null);
   const navigate = useNavigate();
 
@@ -27,7 +30,7 @@ export default function Franchise() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-600 font-medium">Loading Dashboard...</p>
+        <p className="text-slate-600 font-medium">{t('common.loading')}</p>
       </div>
     </div>
   );
@@ -43,10 +46,11 @@ export default function Franchise() {
             VyaparKendra
           </span>
           <span className="ml-2 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold uppercase tracking-wider">
-            Franchise
+            {t('nav.franchise')}
           </span>
         </div>
         <div className="flex items-center gap-4">
+          <LanguageSelector />
           <div className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg">
             <MapPin size={16} className="text-indigo-600" />
             {data.district || "Unknown Region"}
@@ -55,14 +59,14 @@ export default function Franchise() {
             onClick={() => { localStorage.clear(); navigate("/"); }} 
             className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
           >
-            Logout
+            {t('nav.logout')}
           </button>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Franchise Overview</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t('nav.franchise')} {t('dashboard.overview')}</h1>
           <p className="text-slate-500">Monitor your regional performance and Mitra network.</p>
         </div>
 
@@ -73,7 +77,7 @@ export default function Franchise() {
               <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                 <IndianRupee size={20} />
               </div>
-              <h2 className="text-slate-500 text-sm font-medium">Total Commission</h2>
+              <h2 className="text-slate-500 text-sm font-medium">{t('dashboard.totalCommission')}</h2>
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-auto">₹{data.totalCommission.toLocaleString()}</p>
           </div>
@@ -93,7 +97,7 @@ export default function Franchise() {
               <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
                 <Users size={20} />
               </div>
-              <h2 className="text-slate-500 text-sm font-medium">Active Mitras</h2>
+              <h2 className="text-slate-500 text-sm font-medium">{t('dashboard.activeMitras')}</h2>
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-auto">{data.totalMitras}</p>
           </div>

@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "../components/LanguageSelector";
 
 export default function Investor() {
+  const { t } = useTranslation();
   const [data, setData] = useState<any>(null);
   const navigate = useNavigate();
 
@@ -21,13 +24,16 @@ export default function Investor() {
     fetchData();
   }, [navigate]);
 
-  if (!data) return <div className="p-8">Loading...</div>;
+  if (!data) return <div className="p-8">{t('common.loading')}</div>;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-slate-800">Investor Dashboard</h1>
-        <button onClick={() => { localStorage.clear(); navigate("/"); }} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">Logout</button>
+        <div className="flex items-center gap-4">
+          <LanguageSelector />
+          <button onClick={() => { localStorage.clear(); navigate("/"); }} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">{t('nav.logout')}</button>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">

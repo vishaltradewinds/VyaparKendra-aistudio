@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "../components/LanguageSelector";
 
 export default function Login() {
+  const { t } = useTranslation();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +42,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <nav className="w-full bg-white border-b border-slate-200 py-4 px-6 flex items-center">
+      <nav className="w-full bg-white border-b border-slate-200 py-4 px-6 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
             V
@@ -48,16 +51,17 @@ export default function Login() {
             VyaparKendra
           </span>
         </Link>
+        <LanguageSelector />
       </nav>
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-slate-900">
-              {isLogin ? "Welcome Back" : "Create Account"}
+              {isLogin ? t('login.title') : t('login.register')}
             </h1>
             <p className="text-slate-500 mt-2">
-              {isLogin ? "Enter your credentials to access your dashboard" : "Join the network and start earning today"}
+              {t('login.subtitle')}
             </p>
           </div>
 
@@ -66,7 +70,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.name')}</label>
                 <input
                   type="text"
                   value={name}
@@ -77,7 +81,7 @@ export default function Login() {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.email')}</label>
               <input
                 type="email"
                 value={email}
@@ -88,7 +92,7 @@ export default function Login() {
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-slate-700">Password</label>
+                <label className="block text-sm font-medium text-slate-700">{t('login.password')}</label>
                 {isLogin && (
                   <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
                     Forgot Password?
@@ -106,7 +110,7 @@ export default function Login() {
             {!isLogin && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.role')}</label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
@@ -121,7 +125,7 @@ export default function Login() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">District</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.district')}</label>
                   <input
                     type="text"
                     value={district}
@@ -132,7 +136,7 @@ export default function Login() {
                 </div>
                 {role === "mitra" && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Referral Code (Optional)</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.referral')}</label>
                     <input
                       type="text"
                       value={referredBy}
@@ -148,7 +152,7 @@ export default function Login() {
               type="submit"
               className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition-colors mt-2"
             >
-              {isLogin ? "Sign In" : "Create Account"}
+              {isLogin ? t('login.signIn') : t('login.register')}
             </button>
           </form>
 

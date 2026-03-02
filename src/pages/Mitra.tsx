@@ -3,8 +3,11 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Bot, Send, IndianRupee, History, Calendar, TrendingUp } from "lucide-react";
 import { List } from "react-window";
+import { useTranslation } from "react-i18next";
+import { LanguageSelector } from "../components/LanguageSelector";
 
 export default function Mitra() {
+  const { t } = useTranslation();
   const [data, setData] = useState<any>(null);
   const [aiInput, setAiInput] = useState("");
   const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([
@@ -58,30 +61,33 @@ export default function Mitra() {
     setIsAiLoading(false);
   };
 
-  if (!data) return <div className="p-8">Loading...</div>;
+  if (!data) return <div className="p-8">{t('common.loading')}</div>;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">Mitra Dashboard</h1>
-        <button onClick={() => { localStorage.clear(); navigate("/"); }} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">Logout</button>
+        <h1 className="text-3xl font-bold text-slate-800">{t('nav.mitra')} Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <LanguageSelector />
+          <button onClick={() => { localStorage.clear(); navigate("/"); }} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">{t('nav.logout')}</button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h2 className="text-slate-500 text-sm font-medium mb-2">Wallet Balance</h2>
+              <h2 className="text-slate-500 text-sm font-medium mb-2">{t('dashboard.walletBalance')}</h2>
               <p className="text-4xl font-bold text-indigo-600">₹{data.balance}</p>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <h2 className="text-slate-500 text-sm font-medium mb-2">Total Requests</h2>
+              <h2 className="text-slate-500 text-sm font-medium mb-2">{t('dashboard.recentRequests')}</h2>
               <p className="text-4xl font-bold text-emerald-600">{data.requests.length}</p>
             </div>
           </div>
           
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold mb-4">Recent Requests</h2>
+            <h2 className="text-xl font-bold mb-4">{t('dashboard.recentRequests')}</h2>
             <div className="h-[300px]">
               {data.requests.length > 0 ? (
                 <List
