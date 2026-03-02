@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy } from "lucide-react";
+import { List } from "react-window";
 
 export default function Franchise() {
   const [data, setData] = useState<any>(null);
@@ -148,44 +149,48 @@ export default function Franchise() {
               <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
               <span className="text-sm text-slate-500">{data.mitras.length} Total</span>
             </div>
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                    <th className="p-4 font-medium">Name</th>
-                    <th className="p-4 font-medium">Email</th>
-                    <th className="p-4 font-medium">KYC Status</th>
-                    <th className="p-4 font-medium text-right">ID</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {data.mitras.map((mitra: any) => (
-                    <tr key={mitra.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 font-medium text-slate-900">{mitra.name || 'Unnamed'}</td>
-                      <td className="p-4 text-slate-600 text-sm">{mitra.email}</td>
-                      <td className="p-4">
-                        {mitra.kyc_status === 'verified' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                            <CheckCircle2 size={12} /> Verified
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
-                            <Clock size={12} /> Pending
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right text-slate-400 text-sm font-mono">{mitra.id.substring(0, 8)}</td>
-                    </tr>
-                  ))}
-                  {data.mitras.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-500">
-                        No Mitras registered in your district yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="flex-1 min-h-[400px]">
+              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-4 p-4 font-medium border-b border-slate-200">
+                <div>Name</div>
+                <div>Email</div>
+                <div>KYC Status</div>
+                <div className="text-right">ID</div>
+              </div>
+              <div className="h-[400px]">
+                {data.mitras.length > 0 ? (
+                  <List
+                    rowCount={data.mitras.length}
+                    rowHeight={64}
+                    style={{ height: 400 }}
+                    rowComponent={({ index, style }) => {
+                      const mitra = data.mitras[index];
+                      return (
+                        <div style={style} className="grid grid-cols-4 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                          <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
+                          <div className="text-slate-600 text-sm truncate pr-2">{mitra.email}</div>
+                          <div>
+                            {mitra.kyc_status === 'verified' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                <CheckCircle2 size={12} /> Verified
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
+                                <Clock size={12} /> Pending
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right text-slate-400 text-sm font-mono">{mitra.id.substring(0, 8)}</div>
+                        </div>
+                      );
+                    }}
+                    rowProps={{}}
+                  />
+                ) : (
+                  <div className="p-8 text-center text-slate-500 italic">
+                    No Mitras registered in your district yet.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -194,30 +199,40 @@ export default function Franchise() {
             <div className="p-6 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">Recent Commissions</h2>
             </div>
-            <div className="p-6 flex-1 overflow-y-auto">
-              <div className="space-y-4">
-                {data.recentCommissions.map((comm: any) => (
-                  <div key={comm.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
-                        +
+            <div className="p-6 flex-1 h-[500px]">
+              {data.recentCommissions.length > 0 ? (
+                <List
+                  rowCount={data.recentCommissions.length}
+                  rowHeight={80}
+                  style={{ height: 500 }}
+                  rowComponent={({ index, style }) => {
+                    const comm = data.recentCommissions[index];
+                    return (
+                      <div style={style} className="px-1 pb-4">
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                              +
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900 text-sm">
+                                {comm.type === 'REFERRAL_BONUS' ? 'Referral Bonus' : 'Commission Earned'}
+                              </p>
+                              <p className="text-xs text-slate-500">{new Date(comm.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <span className="font-bold text-emerald-600">+₹{comm.amount}</span>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-900 text-sm">
-                          {comm.type === 'REFERRAL_BONUS' ? 'Referral Bonus' : 'Commission Earned'}
-                        </p>
-                        <p className="text-xs text-slate-500">{new Date(comm.created_at).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <span className="font-bold text-emerald-600">+₹{comm.amount}</span>
-                  </div>
-                ))}
-                {data.recentCommissions.length === 0 && (
-                  <div className="text-center py-8 text-slate-500">
-                    No commissions earned yet.
-                  </div>
-                )}
-              </div>
+                    );
+                  }}
+                  rowProps={{}}
+                />
+              ) : (
+                <div className="text-center py-8 text-slate-500 italic">
+                  No commissions earned yet.
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -98,9 +98,11 @@ db.exec(`
     credit TEXT,
     amount REAL,
     district TEXT,
+    userId TEXT,
     gstAmount REAL DEFAULT 0,
     tdsAmount REAL DEFAULT 0,
-    created_at TEXT
+    created_at TEXT,
+    FOREIGN KEY(userId) REFERENCES users(id)
   );
   CREATE TABLE IF NOT EXISTS service_requests (
     id TEXT PRIMARY KEY,
@@ -118,6 +120,19 @@ db.exec(`
     role TEXT,
     created_at TEXT
   );
+  
+  -- Migration: Ensure userId exists in ledger
+  -- Note: SQLite doesn't support IF NOT EXISTS for ADD COLUMN easily in one statement
+  -- but we can use a try-catch or just check if it exists.
+`);
+
+try {
+  db.exec("ALTER TABLE ledger ADD COLUMN userId TEXT");
+} catch (e) {
+  // Column likely already exists
+}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS services (
     id TEXT PRIMARY KEY,
     name TEXT,
@@ -245,8 +260,8 @@ app.post("/api/wallet/recharge", auth(["admin"]), (req: any, res) => {
     db.prepare("INSERT INTO wallets (mitraId, balance) VALUES (?, ?)").run(mitraId, amount);
   }
 
-  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount) VALUES (?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "RECHARGE", "BANK", "MITRA_WALLET", amount
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "RECHARGE", "BANK", "MITRA_WALLET", amount, mitraId, new Date().toISOString()
   );
 
   res.json("Wallet Credited");
@@ -256,10 +271,29 @@ app.post("/api/wallet/recharge", auth(["admin"]), (req: any, res) => {
 const calculateFranchiseCommission = (district: string, amount: number) => {
   const rate = 0.1;
   const commission = amount * rate;
+  
+  const franchise = db.prepare("SELECT id FROM users WHERE role = 'franchise' AND district = ?").get(district) as any;
+  const franchiseId = franchise?.id || null;
 
-  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district, franchiseId, new Date().toISOString()
   );
+
+  return commission;
+};
+
+const calculateMitraCommission = (mitraId: string, district: string, serviceCode: string, amount: number) => {
+  // Find service commission rate
+  const service = db.prepare("SELECT commission FROM services WHERE name = ?").get(serviceCode) as any;
+  const commissionRate = service?.commission || 0.05; // Default 5% if not found
+  const commission = amount * commissionRate;
+
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "MITRA_COMMISSION", "PLATFORM_REVENUE", "MITRA_WALLET", commission, district, mitraId, new Date().toISOString()
+  );
+  
+  // Also credit the wallet
+  db.prepare("UPDATE wallets SET balance = balance + ? WHERE mitraId = ?").run(commission, mitraId);
 
   return commission;
 };
@@ -280,11 +314,12 @@ app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
 
   db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
 
-  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district
+  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district, req.user.id, new Date().toISOString()
   );
 
   calculateFranchiseCommission(req.user.district, price);
+  calculateMitraCommission(req.user.id, req.user.district, serviceCode, price);
 
   db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
     Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
@@ -303,8 +338,21 @@ app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
 app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
   const user = db.prepare("SELECT onboarding_step, kyc_status FROM users WHERE id = ?").get(req.user.id) as any;
   const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
-  const requests = db.prepare("SELECT * FROM service_requests WHERE mitraId = ?").all(req.user.id);
-  res.json({ balance: wallet?.balance || 0, requests, onboarding_step: user.onboarding_step, kyc_status: user.kyc_status });
+  const requests = db.prepare("SELECT * FROM service_requests WHERE mitraId = ? ORDER BY created_at DESC").all(req.user.id);
+  
+  // Commission data
+  const commissions = db.prepare("SELECT * FROM ledger WHERE userId = ? AND type = 'MITRA_COMMISSION' ORDER BY created_at DESC").all(req.user.id);
+  const totalCommission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE userId = ? AND type = 'MITRA_COMMISSION'").get(req.user.id);
+
+  res.json({ 
+    balance: wallet?.balance || 0, 
+    requests, 
+    onboarding_step: user.onboarding_step, 
+    kyc_status: user.kyc_status,
+    commissions,
+    totalCommission: (totalCommission as any)?.total || 0,
+    payoutSchedule: "Weekly (Every Monday)"
+  });
 });
 
 app.get("/api/onboarding/status", auth(["mitra"]), (req: any, res) => {
@@ -366,13 +414,14 @@ app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
       const referrer = db.prepare("SELECT role, district FROM users WHERE id = ?").get(user.referred_by) as any;
       if (referrer && referrer.role === 'franchise') {
         const bonusAmount = 500;
-        db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
           Math.random().toString(36).substr(2, 9), 
           "REFERRAL_BONUS", 
           "SYSTEM", 
           "FRANCHISE_COMMISSION", 
           bonusAmount, 
           referrer.district,
+          user.referred_by,
           new Date().toISOString()
         );
       }
@@ -430,7 +479,7 @@ app.get("/api/dashboard/investor", auth(["investor"]), (req: any, res) => {
 });
 
 app.post("/api/ai/query", auth(), async (req: any, res) => {
-  const { question } = req.body;
+  const { question, history = [] } = req.body;
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
     
@@ -449,18 +498,31 @@ app.post("/api/ai/query", auth(), async (req: any, res) => {
       userContext += `Recent Loans: ${JSON.stringify(loans)}\n`;
     }
 
-    const systemInstruction = `You are the VyaparKendra AI Assistant. Help the user with their question about business, services, or loans. 
+    const systemInstruction = `You are the VyaparKendra AI Assistant, specifically designed to help Mitras (agents). 
+Your primary responsibilities include:
+1. Service Recommendations: Recommend appropriate services based on customer needs (e.g., if a customer needs a PAN card, recommend the PAN Card service and state the price/processing time).
+2. Customer Queries: Answer questions about required documents, processing times, and service details.
+3. Administrative Tasks: Help the Mitra check their wallet balance, review recent requests, and track loan statuses.
+4. Actions: You can create service requests or apply for loans on behalf of the Mitra using the provided tools.
+
 You have access to the following system data:
 Available Services: ${JSON.stringify(services)}
 
 User Context:
 ${userContext}
 
-Answer the user's question concisely and accurately based on this data.`;
+Answer the user's question concisely, professionally, and accurately based on this data. If a user asks to create a service request, make sure to extract the service code and price from the available services list.`;
+
+    const formattedHistory = history.map((msg: any) => ({
+      role: msg.role === 'ai' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+    const contents = [...formattedHistory, { role: 'user', parts: [{ text: question }] }];
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: question,
+      contents: contents,
       config: {
         systemInstruction: systemInstruction,
         tools: [{
@@ -518,11 +580,12 @@ Answer the user's question concisely and accurately based on this data.`;
         } else {
           db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
           
-          db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district) VALUES (?, ?, ?, ?, ?, ?)").run(
-            Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district
+          db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+            Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district, req.user.id, new Date().toISOString()
           );
 
           calculateFranchiseCommission(req.user.district, price);
+          calculateMitraCommission(req.user.id, req.user.district, serviceCode, price);
 
           db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
             Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
