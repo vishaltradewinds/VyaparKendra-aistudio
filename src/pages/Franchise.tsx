@@ -154,10 +154,11 @@ export default function Franchise() {
               <span className="text-sm text-slate-500">{data.mitras.length} Total</span>
             </div>
             <div className="flex-1 min-h-[400px]">
-              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-4 p-4 font-medium border-b border-slate-200">
+              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-5 p-4 font-medium border-b border-slate-200">
                 <div>Name</div>
                 <div>Email</div>
                 <div>KYC Status</div>
+                <div>Onboarding</div>
                 <div className="text-right">ID</div>
               </div>
               <div className="h-[400px]">
@@ -169,7 +170,7 @@ export default function Franchise() {
                     rowComponent={({ index, style }) => {
                       const mitra = data.mitras[index];
                       return (
-                        <div style={style} className="grid grid-cols-4 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                        <div style={style} className="grid grid-cols-5 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
                           <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
                           <div className="text-slate-600 text-sm truncate pr-2">{mitra.email}</div>
                           <div>
@@ -182,6 +183,9 @@ export default function Franchise() {
                                 <Clock size={12} /> Pending
                               </span>
                             )}
+                          </div>
+                          <div className="text-slate-600 text-sm">
+                            Step {mitra.onboarding_step || 1}/3
                           </div>
                           <div className="text-right text-slate-400 text-sm font-mono">{mitra.id.substring(0, 8)}</div>
                         </div>
