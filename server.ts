@@ -63,6 +63,7 @@ db.exec(`
     kyc_status TEXT DEFAULT 'pending',
     onboarding_step INTEGER DEFAULT 0,
     referred_by TEXT,
+    status TEXT DEFAULT 'active',
     FOREIGN KEY(referred_by) REFERENCES users(id)
   );
   CREATE TABLE IF NOT EXISTS training_modules (
@@ -130,6 +131,12 @@ try {
   db.exec("ALTER TABLE ledger ADD COLUMN userId TEXT");
 } catch (e) {
   // Column likely already exists
+}
+
+try {
+  db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'");
+} catch (e) {
+  // Column might already exist
 }
 
 db.exec(`
@@ -430,13 +437,54 @@ app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
   res.json({ message: "Onboarding submitted for review" });
 });
 
+app.post("/api/dashboard/franchise/mitras", auth(["franchise"]), async (req: any, res) => {
+  const { name, email, password } = req.body;
+  const id = Math.random().toString(36).substr(2, 9);
+  const hashedPassword = await bcrypt.hash(password, 10);
+  
+  try {
+    db.prepare("INSERT INTO users (id, name, email, password, role, district, referred_by, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')")
+      .run(id, name, email, hashedPassword, 'mitra', req.user.district, req.user.id);
+    res.json({ message: "Mitra created successfully", id });
+  } catch (err) {
+    res.status(400).json({ error: "Email already exists or invalid data" });
+  }
+});
+
+app.put("/api/dashboard/franchise/mitras/:id", auth(["franchise"]), async (req: any, res) => {
+  const { name, email, status } = req.body;
+  const mitraId = req.params.id;
+  
+  // Ensure the mitra belongs to the franchise's district
+  const mitra = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'mitra' AND district = ?").get(mitraId, req.user.district);
+  if (!mitra) return res.status(404).json({ error: "Mitra not found" });
+
+  try {
+    db.prepare("UPDATE users SET name = ?, email = ?, status = ? WHERE id = ?").run(name, email, status, mitraId);
+    res.json({ message: "Mitra updated successfully" });
+  } catch (err) {
+    res.status(400).json({ error: "Email already exists or invalid data" });
+  }
+});
+
+app.delete("/api/dashboard/franchise/mitras/:id", auth(["franchise"]), (req: any, res) => {
+  const mitraId = req.params.id;
+  
+  // Ensure the mitra belongs to the franchise's district
+  const mitra = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'mitra' AND district = ?").get(mitraId, req.user.district);
+  if (!mitra) return res.status(404).json({ error: "Mitra not found" });
+
+  db.prepare("UPDATE users SET status = 'deactivated' WHERE id = ?").run(mitraId);
+  res.json({ message: "Mitra deactivated successfully" });
+});
+
 app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
   const commission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'FRANCHISE_COMMISSION' AND district = ?").get(req.user.district);
   const referralBonuses = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE type = 'REFERRAL_BONUS' AND district = ?").get(req.user.district);
   const mitrasCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND district = ?").get(req.user.district);
   const referredMitrasCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'mitra' AND referred_by = ?").get(req.user.id);
   
-  const mitras = db.prepare("SELECT id, name, email, kyc_status, onboarding_step FROM users WHERE role = 'mitra' AND district = ?").all(req.user.district);
+  const mitras = db.prepare("SELECT id, name, email, kyc_status, onboarding_step, status FROM users WHERE role = 'mitra' AND district = ?").all(req.user.district);
   const recentCommissions = db.prepare("SELECT * FROM ledger WHERE (type = 'FRANCHISE_COMMISSION' OR type = 'REFERRAL_BONUS') AND district = ? ORDER BY created_at DESC LIMIT 10").all(req.user.district);
   
   const regionalPerformance = db.prepare(`

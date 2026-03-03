@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy } from "lucide-react";
+import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy, Plus, Edit2, Trash2, ShieldAlert } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
@@ -9,22 +9,75 @@ import { LanguageSelector } from "../components/LanguageSelector";
 export default function Franchise() {
   const { t } = useTranslation();
   const [data, setData] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingMitra, setEditingMitra] = useState<any>(null);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', status: 'active' });
   const navigate = useNavigate();
 
+  const fetchData = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return navigate("/");
+    
+    try {
+      const res = await axios.get("/api/dashboard/franchise", { headers: { Authorization: `Bearer ${token}` } });
+      setData(res.data);
+    } catch (err) {
+      navigate("/");
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) return navigate("/");
-      
-      try {
-        const res = await axios.get("/api/dashboard/franchise", { headers: { Authorization: `Bearer ${token}` } });
-        setData(res.data);
-      } catch (err) {
-        navigate("/");
-      }
-    };
     fetchData();
   }, [navigate]);
+
+  const handleOpenModal = (mitra: any = null) => {
+    if (mitra) {
+      setEditingMitra(mitra);
+      setFormData({ name: mitra.name, email: mitra.email, password: '', status: mitra.status || 'active' });
+    } else {
+      setEditingMitra(null);
+      setFormData({ name: '', email: '', password: '', status: 'active' });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingMitra(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    try {
+      if (editingMitra) {
+        await axios.put(`/api/dashboard/franchise/mitras/${editingMitra.id}`, formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        await axios.post("/api/dashboard/franchise/mitras", formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      fetchData();
+      handleCloseModal();
+    } catch (err) {
+      alert("Error saving Mitra. Please check the details.");
+    }
+  };
+
+  const handleDeactivate = async (id: string) => {
+    if (!window.confirm("Are you sure you want to deactivate this Mitra?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      await axios.delete(`/api/dashboard/franchise/mitras/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchData();
+    } catch (err) {
+      alert("Error deactivating Mitra.");
+    }
+  };
 
   if (!data) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -150,16 +203,25 @@ export default function Franchise() {
           {/* Mitras List */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
-              <span className="text-sm text-slate-500">{data.mitras.length} Total</span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
+                <span className="text-sm text-slate-500">{data.mitras.length} Total</span>
+              </div>
+              <button 
+                onClick={() => handleOpenModal()}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+              >
+                <Plus size={16} /> Add Mitra
+              </button>
             </div>
             <div className="flex-1 min-h-[400px]">
-              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-5 p-4 font-medium border-b border-slate-200">
+              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-6 p-4 font-medium border-b border-slate-200">
                 <div>Name</div>
                 <div>Email</div>
                 <div>KYC Status</div>
                 <div>Onboarding</div>
-                <div className="text-right">ID</div>
+                <div>Status</div>
+                <div className="text-right">Actions</div>
               </div>
               <div className="h-[400px]">
                 {data.mitras.length > 0 ? (
@@ -170,7 +232,7 @@ export default function Franchise() {
                     rowComponent={({ index, style }) => {
                       const mitra = data.mitras[index];
                       return (
-                        <div style={style} className="grid grid-cols-5 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                        <div style={style} className="grid grid-cols-6 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
                           <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
                           <div className="text-slate-600 text-sm truncate pr-2">{mitra.email}</div>
                           <div>
@@ -187,7 +249,27 @@ export default function Franchise() {
                           <div className="text-slate-600 text-sm">
                             Step {mitra.onboarding_step || 1}/3
                           </div>
-                          <div className="text-right text-slate-400 text-sm font-mono">{mitra.id.substring(0, 8)}</div>
+                          <div>
+                            {mitra.status === 'deactivated' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-medium">
+                                <ShieldAlert size={12} /> Deactivated
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right flex items-center justify-end gap-2">
+                            <button onClick={() => handleOpenModal(mitra)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors">
+                              <Edit2 size={16} />
+                            </button>
+                            {mitra.status !== 'deactivated' && (
+                              <button onClick={() => handleDeactivate(mitra.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     }}
@@ -245,6 +327,81 @@ export default function Franchise() {
           </div>
         </div>
       </div>
+
+      {/* Add/Edit Mitra Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900">
+                {editingMitra ? 'Edit Mitra' : 'Add New Mitra'}
+              </h2>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  required
+                />
+              </div>
+              {!editingMitra && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+              )}
+              {editingMitra && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  >
+                    <option value="active">Active</option>
+                    <option value="deactivated">Deactivated</option>
+                  </select>
+                </div>
+              )}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  {editingMitra ? 'Save Changes' : 'Add Mitra'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
