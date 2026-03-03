@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, IndianRupee, History, Calendar, TrendingUp } from "lucide-react";
+import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Mitra() {
   const { t } = useTranslation();
@@ -14,6 +15,12 @@ export default function Mitra() {
     { role: 'ai', content: "Hi! I'm your VyaparKendra AI Assistant. How can I help you with service recommendations, customer queries, or administrative tasks today?" }
   ]);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Filters
+  const [requestSearch, setRequestSearch] = useState("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("all");
+  const [commissionTypeFilter, setCommissionTypeFilter] = useState("all");
+
   const navigate = useNavigate();
 
   const fetchData = () => {
@@ -63,6 +70,17 @@ export default function Mitra() {
 
   if (!data) return <div className="p-8">{t('common.loading')}</div>;
 
+  // Filtered Data
+  const filteredRequests = data?.requests?.filter((req: any) => {
+    const matchesSearch = (req.serviceCode?.toLowerCase() || '').includes(requestSearch.toLowerCase());
+    const matchesStatus = requestStatusFilter === 'all' || req.status === requestStatusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
+
+  const filteredCommissions = data?.commissions?.filter((comm: any) => {
+    return commissionTypeFilter === 'all' || comm.type === commissionTypeFilter;
+  }) || [];
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
@@ -78,7 +96,32 @@ export default function Mitra() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h2 className="text-slate-500 text-sm font-medium mb-2">{t('dashboard.walletBalance')}</h2>
-              <p className="text-4xl font-bold text-indigo-600">₹{data.balance}</p>
+              <p className="text-4xl font-bold text-indigo-600 mb-6">₹{data.balance}</p>
+              
+              {data.walletHistory && data.walletHistory.length > 0 && (
+                <div className="h-[150px] w-full mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={data.walletHistory}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                      <XAxis dataKey="date" hide />
+                      <YAxis hide domain={['auto', 'auto']} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value: number) => [`₹${value}`, 'Balance']}
+                        labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="balance" 
+                        stroke="#4f46e5" 
+                        strokeWidth={3}
+                        dot={false}
+                        activeDot={{ r: 6, fill: '#4f46e5', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <h2 className="text-slate-500 text-sm font-medium mb-2">{t('dashboard.recentRequests')}</h2>
@@ -87,15 +130,40 @@ export default function Mitra() {
           </div>
           
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold mb-4">{t('dashboard.recentRequests')}</h2>
+            <div className="flex flex-col gap-4 mb-4">
+              <h2 className="text-xl font-bold">{t('dashboard.recentRequests')}</h2>
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Search service code..." 
+                    value={requestSearch}
+                    onChange={(e) => setRequestSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <select 
+                  value={requestStatusFilter}
+                  onChange={(e) => setRequestStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            </div>
             <div className="h-[300px]">
-              {data.requests.length > 0 ? (
+              {filteredRequests.length > 0 ? (
                 <List
-                  rowCount={data.requests.length}
+                  rowCount={filteredRequests.length}
                   rowHeight={64}
                   style={{ height: 300 }}
                   rowComponent={({ index, style }) => {
-                    const req = data.requests[index];
+                    const req = filteredRequests[index];
                     return (
                       <div style={style} className="flex justify-between items-center border-b border-slate-100 pb-2 px-1">
                         <div>
@@ -147,18 +215,28 @@ export default function Mitra() {
               </div>
             </div>
 
-            <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-              <IndianRupee size={16} />
-              Commission History
-            </h3>
+            <div className="flex flex-col gap-4 mb-4">
+              <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <IndianRupee size={16} />
+                Commission History
+              </h3>
+              <select 
+                value={commissionTypeFilter}
+                onChange={(e) => setCommissionTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              >
+                <option value="all">All Types</option>
+                <option value="MITRA_COMMISSION">Service Commissions</option>
+              </select>
+            </div>
             <div className="h-[400px]">
-              {data.commissions.length > 0 ? (
+              {filteredCommissions.length > 0 ? (
                 <List
-                  rowCount={data.commissions.length}
+                  rowCount={filteredCommissions.length}
                   rowHeight={72}
                   style={{ height: 400 }}
                   rowComponent={({ index, style }) => {
-                    const comm = data.commissions[index];
+                    const comm = filteredCommissions[index];
                     return (
                       <div style={style} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-50 last:border-0">
                         <div>

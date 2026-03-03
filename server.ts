@@ -337,9 +337,18 @@ app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
 
 // --- Dashboard Routes ---
 app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
-  const users = db.prepare("SELECT COUNT(*) as count FROM users").get();
+  const usersCount = db.prepare("SELECT COUNT(*) as count FROM users").get();
   const revenue = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE credit = 'PLATFORM_REVENUE'").get();
-  res.json({ totalUsers: (users as any).count, platformRevenue: (revenue as any).total || 0 });
+  
+  const users = db.prepare("SELECT id, name, email, role, district, kyc_status, status FROM users ORDER BY id DESC").all();
+  const ledger = db.prepare("SELECT * FROM ledger ORDER BY created_at DESC LIMIT 100").all();
+
+  res.json({ 
+    totalUsers: (usersCount as any).count, 
+    platformRevenue: (revenue as any).total || 0,
+    users,
+    ledger
+  });
 });
 
 app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
@@ -351,6 +360,40 @@ app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
   const commissions = db.prepare("SELECT * FROM ledger WHERE userId = ? AND type = 'MITRA_COMMISSION' ORDER BY created_at DESC").all(req.user.id);
   const totalCommission = db.prepare("SELECT SUM(amount) as total FROM ledger WHERE userId = ? AND type = 'MITRA_COMMISSION'").get(req.user.id);
 
+  // Wallet history
+  const ledgerEntries = db.prepare("SELECT type, amount, created_at FROM ledger WHERE userId = ? ORDER BY created_at ASC").all(req.user.id);
+  
+  let currentBalance = 0;
+  const walletHistory = ledgerEntries.map((entry: any) => {
+    if (entry.type === 'WALLET_RECHARGE' || entry.type === 'MITRA_COMMISSION') {
+      currentBalance += entry.amount;
+    } else if (entry.type === 'SERVICE_DEBIT') {
+      currentBalance -= entry.amount;
+    }
+    return {
+      date: new Date(entry.created_at).toLocaleDateString(),
+      balance: currentBalance,
+      type: entry.type,
+      amount: entry.amount
+    };
+  });
+
+  // Group by date to show daily balance
+  const dailyBalanceMap = new Map();
+  walletHistory.forEach((entry: any) => {
+    dailyBalanceMap.set(entry.date, entry.balance);
+  });
+  
+  const chartData = Array.from(dailyBalanceMap.entries()).map(([date, balance]) => ({
+    date,
+    balance
+  }));
+
+  // If chartData is empty, add a default point
+  if (chartData.length === 0) {
+    chartData.push({ date: new Date().toLocaleDateString(), balance: wallet?.balance || 0 });
+  }
+
   res.json({ 
     balance: wallet?.balance || 0, 
     requests, 
@@ -358,7 +401,8 @@ app.get("/api/dashboard/mitra", auth(["mitra"]), (req: any, res) => {
     kyc_status: user.kyc_status,
     commissions,
     totalCommission: (totalCommission as any)?.total || 0,
-    payoutSchedule: "Weekly (Every Monday)"
+    payoutSchedule: "Weekly (Every Monday)",
+    walletHistory: chartData
   });
 });
 

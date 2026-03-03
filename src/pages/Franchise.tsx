@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy, Plus, Edit2, Trash2, ShieldAlert } from "lucide-react";
+import { Users, IndianRupee, Activity, TrendingUp, MapPin, CheckCircle2, Clock, Gift, Copy, Plus, Edit2, Trash2, ShieldAlert, Search, Filter } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
@@ -12,6 +12,13 @@ export default function Franchise() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMitra, setEditingMitra] = useState<any>(null);
   const [formData, setFormData] = useState({ name: '', email: '', password: '', status: 'active' });
+  
+  // Filters
+  const [mitraSearch, setMitraSearch] = useState("");
+  const [mitraStatusFilter, setMitraStatusFilter] = useState("all");
+  const [mitraKycFilter, setMitraKycFilter] = useState("all");
+  const [commissionTypeFilter, setCommissionTypeFilter] = useState("all");
+
   const navigate = useNavigate();
 
   const fetchData = async () => {
@@ -78,6 +85,19 @@ export default function Franchise() {
       alert("Error deactivating Mitra.");
     }
   };
+
+  // Filtered Data
+  const filteredMitras = data?.mitras?.filter((mitra: any) => {
+    const matchesSearch = (mitra.name?.toLowerCase() || '').includes(mitraSearch.toLowerCase()) || 
+                          (mitra.email?.toLowerCase() || '').includes(mitraSearch.toLowerCase());
+    const matchesStatus = mitraStatusFilter === 'all' || mitra.status === mitraStatusFilter;
+    const matchesKyc = mitraKycFilter === 'all' || mitra.kyc_status === mitraKycFilter;
+    return matchesSearch && matchesStatus && matchesKyc;
+  }) || [];
+
+  const filteredCommissions = data?.recentCommissions?.filter((comm: any) => {
+    return commissionTypeFilter === 'all' || comm.type === commissionTypeFilter;
+  }) || [];
 
   if (!data) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -202,17 +222,49 @@ export default function Franchise() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Mitras List */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
-                <span className="text-sm text-slate-500">{data.mitras.length} Total</span>
+            <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
+                  <span className="text-sm text-slate-500">{filteredMitras.length} Mitras</span>
+                </div>
+                <button 
+                  onClick={() => handleOpenModal()}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                >
+                  <Plus size={16} /> Add Mitra
+                </button>
               </div>
-              <button 
-                onClick={() => handleOpenModal()}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-              >
-                <Plus size={16} /> Add Mitra
-              </button>
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="text" 
+                    placeholder="Search by name or email..." 
+                    value={mitraSearch}
+                    onChange={(e) => setMitraSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <select 
+                  value={mitraStatusFilter}
+                  onChange={(e) => setMitraStatusFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="deactivated">Deactivated</option>
+                </select>
+                <select 
+                  value={mitraKycFilter}
+                  onChange={(e) => setMitraKycFilter(e.target.value)}
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value="all">All KYC</option>
+                  <option value="verified">Verified</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
             </div>
             <div className="flex-1 min-h-[400px]">
               <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-6 p-4 font-medium border-b border-slate-200">
@@ -224,13 +276,13 @@ export default function Franchise() {
                 <div className="text-right">Actions</div>
               </div>
               <div className="h-[400px]">
-                {data.mitras.length > 0 ? (
+                {filteredMitras.length > 0 ? (
                   <List
-                    rowCount={data.mitras.length}
+                    rowCount={filteredMitras.length}
                     rowHeight={64}
                     style={{ height: 400 }}
                     rowComponent={({ index, style }) => {
-                      const mitra = data.mitras[index];
+                      const mitra = filteredMitras[index];
                       return (
                         <div style={style} className="grid grid-cols-6 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
                           <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
@@ -286,17 +338,26 @@ export default function Franchise() {
 
           {/* Recent Commissions */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-200">
+            <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
               <h2 className="text-lg font-bold text-slate-900">Recent Commissions</h2>
+              <select 
+                value={commissionTypeFilter}
+                onChange={(e) => setCommissionTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              >
+                <option value="all">All Types</option>
+                <option value="FRANCHISE_COMMISSION">Service Commissions</option>
+                <option value="REFERRAL_BONUS">Referral Bonuses</option>
+              </select>
             </div>
             <div className="p-6 flex-1 h-[500px]">
-              {data.recentCommissions.length > 0 ? (
+              {filteredCommissions.length > 0 ? (
                 <List
-                  rowCount={data.recentCommissions.length}
+                  rowCount={filteredCommissions.length}
                   rowHeight={80}
                   style={{ height: 500 }}
                   rowComponent={({ index, style }) => {
-                    const comm = data.recentCommissions[index];
+                    const comm = filteredCommissions[index];
                     return (
                       <div style={style} className="px-1 pb-4">
                         <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
