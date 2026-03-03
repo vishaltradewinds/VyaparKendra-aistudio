@@ -276,7 +276,7 @@ app.post("/api/wallet/recharge", auth(["admin"]), (req: any, res) => {
 
 // --- Commission Engine ---
 const calculateFranchiseCommission = (district: string, amount: number) => {
-  const rate = 0.1;
+  const rate = 0.1; // 10% of the platform fee goes to the franchise
   const commission = amount * rate;
   
   const franchise = db.prepare("SELECT id FROM users WHERE role = 'franchise' AND district = ?").get(district) as any;
@@ -285,22 +285,6 @@ const calculateFranchiseCommission = (district: string, amount: number) => {
   db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
     Math.random().toString(36).substr(2, 9), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district, franchiseId, new Date().toISOString()
   );
-
-  return commission;
-};
-
-const calculateMitraCommission = (mitraId: string, district: string, serviceCode: string, amount: number) => {
-  // Find service commission rate
-  const service = db.prepare("SELECT commission FROM services WHERE name = ?").get(serviceCode) as any;
-  const commissionRate = service?.commission || 0.05; // Default 5% if not found
-  const commission = amount * commissionRate;
-
-  db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "MITRA_COMMISSION", "PLATFORM_REVENUE", "MITRA_WALLET", commission, district, mitraId, new Date().toISOString()
-  );
-  
-  // Also credit the wallet
-  db.prepare("UPDATE wallets SET balance = balance + ? WHERE mitraId = ?").run(commission, mitraId);
 
   return commission;
 };
@@ -314,22 +298,32 @@ app.get("/api/services", (req: any, res) => {
 app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
   const { serviceCode, price } = req.body;
 
+  // Find service to get the platform fee
+  const service = db.prepare("SELECT * FROM services WHERE name = ?").get(serviceCode) as any;
+  if (!service) return res.status(404).json("Service not found");
+
+  // The 'price' in the DB is now treated as the platform fee that the Mitra must pay
+  const platformFee = service.price;
+
   const wallet: any = db.prepare("SELECT * FROM wallets WHERE mitraId = ?").get(req.user.id);
-  if (!wallet || wallet.balance < price) {
-    return res.status(400).json("Insufficient balance");
+  if (!wallet || wallet.balance < platformFee) {
+    return res.status(400).json(`Insufficient balance. This service requires a platform fee of ₹${platformFee}.`);
   }
 
-  db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
+  // Deduct the platform fee from the Mitra's wallet
+  db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(platformFee, req.user.id);
 
+  // Record the debit
   db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district, req.user.id, new Date().toISOString()
+    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
   );
 
-  calculateFranchiseCommission(req.user.district, price);
-  calculateMitraCommission(req.user.id, req.user.district, serviceCode, price);
+  // Calculate Franchise Commission based on the platform fee
+  calculateFranchiseCommission(req.user.district, platformFee);
 
+  // Create the service request
   db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
+    Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, platformFee, new Date().toISOString()
   );
 
   res.json("Service Created");
@@ -633,10 +627,9 @@ Answer the user's question concisely, professionally, and accurately based on th
               parameters: {
                 type: Type.OBJECT,
                 properties: {
-                  serviceCode: { type: Type.STRING, description: "The name or code of the service to request." },
-                  price: { type: Type.NUMBER, description: "The price of the service." }
+                  serviceCode: { type: Type.STRING, description: "The name or code of the service to request." }
                 },
-                required: ["serviceCode", "price"]
+                required: ["serviceCode"]
               }
             },
             {
@@ -665,24 +658,33 @@ Answer the user's question concisely, professionally, and accurately based on th
         const balance: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
         answer = `Your current wallet balance is ₹${balance?.balance || 0}.`;
       } else if (call.name === "createServiceRequest") {
-        const { serviceCode, price } = call.args as any;
-        const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
-        if (!wallet || wallet.balance < price) {
-          answer = `You have insufficient balance to create a request for ${serviceCode}. It costs ₹${price}, but your balance is ₹${wallet?.balance || 0}.`;
+        const { serviceCode } = call.args as any;
+        
+        // Find service to get the platform fee
+        const service = db.prepare("SELECT * FROM services WHERE name = ?").get(serviceCode) as any;
+        
+        if (!service) {
+          answer = `I couldn't find a service named ${serviceCode}.`;
         } else {
-          db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(price, req.user.id);
+          const platformFee = service.price;
+          const wallet: any = db.prepare("SELECT balance FROM wallets WHERE mitraId = ?").get(req.user.id);
           
-          db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-            Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", price, req.user.district, req.user.id, new Date().toISOString()
-          );
+          if (!wallet || wallet.balance < platformFee) {
+            answer = `You have insufficient balance to create a request for ${serviceCode}. It requires a platform fee of ₹${platformFee}, but your balance is ₹${wallet?.balance || 0}.`;
+          } else {
+            db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(platformFee, req.user.id);
+            
+            db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+              Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
+            );
 
-          calculateFranchiseCommission(req.user.district, price);
-          calculateMitraCommission(req.user.id, req.user.district, serviceCode, price);
+            calculateFranchiseCommission(req.user.district, platformFee);
 
-          db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
-            Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, price, new Date().toISOString()
-          );
-          answer = `Successfully created a service request for ${serviceCode}. ₹${price} has been deducted from your wallet.`;
+            db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
+              Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, platformFee, new Date().toISOString()
+            );
+            answer = `Successfully created a service request for ${serviceCode}. A platform fee of ₹${platformFee} has been deducted from your wallet.`;
+          }
         }
       } else if (call.name === "applyForLoan") {
         const { applicantName, amount, purpose } = call.args as any;
