@@ -139,6 +139,17 @@ try {
   // Column might already exist
 }
 
+try {
+  db.exec("ALTER TABLE users ADD COLUMN bank_account_number TEXT");
+  db.exec("ALTER TABLE users ADD COLUMN bank_ifsc TEXT");
+  db.exec("ALTER TABLE users ADD COLUMN bank_name TEXT");
+  db.exec("ALTER TABLE users ADD COLUMN business_name TEXT");
+  db.exec("ALTER TABLE users ADD COLUMN gst_number TEXT");
+  db.exec("ALTER TABLE users ADD COLUMN pan_number TEXT");
+} catch (e) {
+  // Columns might already exist
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS services (
     id TEXT PRIMARY KEY,
@@ -365,6 +376,25 @@ app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
   );
 
   res.json("Service Created");
+});
+
+app.get("/api/user/profile", auth(["mitra", "franchise", "admin", "investor", "ca", "compliance"]), (req: any, res) => {
+  const user = db.prepare("SELECT id, name, email, role, district, kyc_status, status, bank_account_number, bank_ifsc, bank_name, business_name, gst_number, pan_number FROM users WHERE id = ?").get(req.user.id);
+  res.json(user);
+});
+
+app.put("/api/user/profile", auth(["mitra", "franchise", "admin", "investor", "ca", "compliance"]), (req: any, res) => {
+  const { bank_account_number, bank_ifsc, bank_name, business_name, gst_number, pan_number } = req.body;
+  try {
+    db.prepare(`
+      UPDATE users 
+      SET bank_account_number = ?, bank_ifsc = ?, bank_name = ?, business_name = ?, gst_number = ?, pan_number = ?
+      WHERE id = ?
+    `).run(bank_account_number, bank_ifsc, bank_name, business_name, gst_number, pan_number, req.user.id);
+    res.json({ message: "Profile updated successfully" });
+  } catch (e) {
+    res.status(400).json({ error: "Failed to update profile" });
+  }
 });
 
 // --- Dashboard Routes ---

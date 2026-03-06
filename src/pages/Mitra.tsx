@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter } from "lucide-react";
+import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter, UserCircle } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { UserProfile } from "../components/UserProfile";
 
 export default function Mitra() {
   const { t } = useTranslation();
   const [data, setData] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'profile'>('dashboard');
   const [aiInput, setAiInput] = useState("");
   const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([
     { role: 'ai', content: "Hi! I'm your VyaparKendra AI Assistant. How can I help you with service recommendations, customer queries, or administrative tasks today?" }
@@ -90,8 +92,26 @@ export default function Mitra() {
           <button onClick={() => { localStorage.clear(); navigate("/"); }} className="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300">{t('nav.logout')}</button>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+
+      <div className="mb-6 flex gap-4 border-b border-slate-200">
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={`pb-3 px-4 text-sm font-medium transition-colors ${activeTab === 'dashboard' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Overview
+        </button>
+        <button 
+          onClick={() => setActiveTab('profile')}
+          className={`pb-3 px-4 text-sm font-medium transition-colors ${activeTab === 'profile' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          My Profile
+        </button>
+      </div>
+
+      {activeTab === 'profile' ? (
+        <UserProfile />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -311,6 +331,7 @@ export default function Mitra() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
