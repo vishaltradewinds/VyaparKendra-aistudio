@@ -295,6 +295,44 @@ app.get("/api/services", (req: any, res) => {
   res.json(services);
 });
 
+app.post("/api/services", auth(["admin"]), (req: any, res) => {
+  const { name, category, price, commission, description, processing_time } = req.body;
+  const id = Math.random().toString(36).substr(2, 9);
+  
+  try {
+    db.prepare("INSERT INTO services (id, name, category, price, commission, description, processing_time) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+      id, name, category, price, commission, description, processing_time
+    );
+    res.json({ message: "Service created successfully", id });
+  } catch (e) {
+    res.status(400).json({ error: "Failed to create service" });
+  }
+});
+
+app.put("/api/services/:id", auth(["admin"]), (req: any, res) => {
+  const { name, category, price, commission, description, processing_time } = req.body;
+  const id = req.params.id;
+  
+  try {
+    db.prepare("UPDATE services SET name = ?, category = ?, price = ?, commission = ?, description = ?, processing_time = ? WHERE id = ?").run(
+      name, category, price, commission, description, processing_time, id
+    );
+    res.json({ message: "Service updated successfully" });
+  } catch (e) {
+    res.status(400).json({ error: "Failed to update service" });
+  }
+});
+
+app.delete("/api/services/:id", auth(["admin"]), (req: any, res) => {
+  const id = req.params.id;
+  try {
+    db.prepare("DELETE FROM services WHERE id = ?").run(id);
+    res.json({ message: "Service deleted successfully" });
+  } catch (e) {
+    res.status(400).json({ error: "Failed to delete service" });
+  }
+});
+
 app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
   const { serviceCode, price } = req.body;
 
@@ -336,12 +374,14 @@ app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
   
   const users = db.prepare("SELECT id, name, email, role, district, kyc_status, status FROM users ORDER BY id DESC").all();
   const ledger = db.prepare("SELECT * FROM ledger ORDER BY created_at DESC LIMIT 100").all();
+  const services = db.prepare("SELECT * FROM services ORDER BY name ASC").all();
 
   res.json({ 
     totalUsers: (usersCount as any).count, 
     platformRevenue: (revenue as any).total || 0,
     users,
-    ledger
+    ledger,
+    services
   });
 });
 
