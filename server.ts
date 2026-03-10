@@ -21,6 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set("trust proxy", 1);
 
 // Production Middleware
 app.use(helmet({
@@ -37,6 +38,10 @@ const apiLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.ip || "unknown",
+  validate: {
+    xForwardedForHeader: false,
+  }
 });
 app.use("/api/", apiLimiter);
 
