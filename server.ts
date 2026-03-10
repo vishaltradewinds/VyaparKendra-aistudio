@@ -1,5 +1,4 @@
 import express from "express";
-import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import fs from "fs";
 import crypto from "crypto";
@@ -10,15 +9,38 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { servicesSeedData } from "./seedData.js";
+import helmet from "helmet";
+import cors from "cors";
+import morgan from "morgan";
+import rateLimit from "express-rate-limit";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(express.json());
 
-const PORT = 3000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/vyaparkendra";
+// Production Middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled for Vite dev server compatibility
+  crossOriginEmbedderPolicy: false
+}));
+app.use(cors());
+app.use(morgan("combined"));
+app.use(express.json({ limit: "1mb" }));
+
+// Rate Limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/", apiLimiter);
+
+const PORT = Number(process.env.PORT) || 3000;
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || "super_internal_token";
 
 // =====================================================
@@ -27,13 +49,14 @@ const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || "super_internal_tok
 let privateKey: string;
 let publicKey: string;
 
-// For a fully deployable demo, we need both public and private keys to sign and verify JWTs.
-// If the private key is missing, we generate a new pair for the demo environment.
-if (fs.existsSync("./private.pem") && fs.existsSync("./public.pem")) {
+if (process.env.PRIVATE_KEY && process.env.PUBLIC_KEY) {
+  privateKey = process.env.PRIVATE_KEY;
+  publicKey = process.env.PUBLIC_KEY;
+} else if (fs.existsSync("./private.pem") && fs.existsSync("./public.pem")) {
   privateKey = fs.readFileSync("./private.pem", "utf8");
   publicKey = fs.readFileSync("./public.pem", "utf8");
 } else {
-  console.log("Generating new RSA keypair for RS256 demo...");
+  console.log("Generating new RSA keypair for RS256...");
   const { privateKey: prk, publicKey: puk } = crypto.generateKeyPairSync("rsa", {
     modulusLength: 2048,
     publicKeyEncoding: { type: "spki", format: "pem" },
@@ -49,8 +72,11 @@ if (fs.existsSync("./private.pem") && fs.existsSync("./public.pem")) {
 // 2. DATABASE CONNECTIONS
 // =====================================================
 
-// SQLite (Primary Demo DB to ensure the UI works flawlessly without external setup)
-const db = new Database("vyaparkendra.db");
+// SQLite Database Configuration
+const db = new Database(process.env.DB_PATH || "vyaparkendra.db");
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -182,7 +208,7 @@ if (existingServices.count === 0) {
   const insertService = db.prepare("INSERT INTO services (id, name, category, price, commission, description, processing_time) VALUES (?, ?, ?, ?, ?, ?, ?)");
   const insertMany = db.transaction((services) => {
     for (const s of services) {
-      insertService.run(Math.random().toString(36).substr(2, 9), s.name, s.category, s.price, s.commission, s.description, s.processing_time);
+      insertService.run(crypto.randomUUID(), s.name, s.category, s.price, s.commission, s.description, s.processing_time);
     }
   });
   insertMany(servicesSeedData);
@@ -201,6 +227,17 @@ if (existingModules.count === 0) {
   const insert = db.prepare("INSERT INTO training_modules (id, title, description, duration, order_index) VALUES (?, ?, ?, ?, ?)");
   modules.forEach(m => insert.run(m.id, m.title, m.description, m.duration, m.order_index));
   console.log("Seeded training modules.");
+}
+
+// Seed Admin User
+const existingAdmin = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get() as any;
+if (existingAdmin.count === 0) {
+  const adminId = crypto.randomUUID();
+  const adminPassword = bcrypt.hashSync("admin123", 10);
+  db.prepare("INSERT INTO users (id, name, email, password, role, district, status) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    adminId, "Super Admin", "admin@vyaparkendra.com", adminPassword, "admin", "All", "active"
+  );
+  console.log("Seeded default admin user (admin@vyaparkendra.com / admin123).");
 }
 
 // =====================================================
@@ -246,11 +283,16 @@ app.get("/internal/metrics", (req, res) => {
 // --- Auth Routes ---
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password, role, district, referredBy } = req.body;
+  
+  // Prevent public registration of privileged roles
+  const allowedRoles = ["mitra", "franchise", "ca", "compliance", "investor"];
+  const finalRole = allowedRoles.includes(role) ? role : "mitra";
+
   const hashedPassword = await bcrypt.hash(password, 10);
-  const id = Math.random().toString(36).substr(2, 9);
+  const id = crypto.randomUUID();
   try {
-    db.prepare("INSERT INTO users (id, name, email, password, role, district, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, role, district, referredBy || null);
-    res.json({ message: "Registration successful", user: { id, name, email, role, district } });
+    db.prepare("INSERT INTO users (id, name, email, password, role, district, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, name, email, hashedPassword, finalRole, district, referredBy || null);
+    res.json({ message: "Registration successful", user: { id, name, email, role: finalRole, district } });
   } catch (e) {
     res.status(400).json({ error: "Email already exists" });
   }
@@ -279,7 +321,7 @@ app.post("/api/wallet/recharge", auth(["admin"]), (req: any, res) => {
   }
 
   db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "RECHARGE", "BANK", "MITRA_WALLET", amount, mitraId, new Date().toISOString()
+    crypto.randomUUID(), "RECHARGE", "BANK", "MITRA_WALLET", amount, mitraId, new Date().toISOString()
   );
 
   res.json("Wallet Credited");
@@ -294,7 +336,7 @@ const calculateFranchiseCommission = (district: string, amount: number) => {
   const franchiseId = franchise?.id || null;
 
   db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district, franchiseId, new Date().toISOString()
+    crypto.randomUUID(), "FRANCHISE_COMMISSION", "PLATFORM_REVENUE", "FRANCHISE_ACCOUNT", commission, district, franchiseId, new Date().toISOString()
   );
 
   return commission;
@@ -308,7 +350,7 @@ app.get("/api/services", (req: any, res) => {
 
 app.post("/api/services", auth(["admin"]), (req: any, res) => {
   const { name, category, price, commission, description, processing_time } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
+  const id = crypto.randomUUID();
   
   try {
     db.prepare("INSERT INTO services (id, name, category, price, commission, description, processing_time) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
@@ -364,7 +406,7 @@ app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
 
   // Record the debit
   db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
+    crypto.randomUUID(), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
   );
 
   // Calculate Franchise Commission based on the platform fee
@@ -372,7 +414,7 @@ app.post("/api/service/create", auth(["mitra"]), (req: any, res) => {
 
   // Create the service request
   db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
-    Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, platformFee, new Date().toISOString()
+    crypto.randomUUID(), serviceCode, req.user.id, platformFee, new Date().toISOString()
   );
 
   res.json("Service Created");
@@ -484,7 +526,7 @@ app.get("/api/onboarding/status", auth(["mitra"]), (req: any, res) => {
 
 app.post("/api/onboarding/upload", auth(["mitra"]), (req: any, res) => {
   const { docType } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
+  const id = crypto.randomUUID();
   db.prepare("INSERT INTO mitra_documents (id, mitraId, docType, status, uploaded_at) VALUES (?, ?, ?, 'PENDING', ?)").run(
     id, req.user.id, docType, new Date().toISOString()
   );
@@ -530,7 +572,7 @@ app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
       if (referrer && referrer.role === 'franchise') {
         const bonusAmount = 500;
         db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-          Math.random().toString(36).substr(2, 9), 
+          crypto.randomUUID(), 
           "REFERRAL_BONUS", 
           "SYSTEM", 
           "FRANCHISE_COMMISSION", 
@@ -547,7 +589,7 @@ app.post("/api/onboarding/final-submit", auth(["mitra"]), (req: any, res) => {
 
 app.post("/api/dashboard/franchise/mitras", auth(["franchise"]), async (req: any, res) => {
   const { name, email, password } = req.body;
-  const id = Math.random().toString(36).substr(2, 9);
+  const id = crypto.randomUUID();
   const hashedPassword = await bcrypt.hash(password, 10);
   
   try {
@@ -745,13 +787,13 @@ Answer the user's question concisely, professionally, and accurately based on th
             db.prepare("UPDATE wallets SET balance = balance - ? WHERE mitraId = ?").run(platformFee, req.user.id);
             
             db.prepare("INSERT INTO ledger (id, type, debit, credit, amount, district, userId, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
-              Math.random().toString(36).substr(2, 9), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
+              crypto.randomUUID(), "SERVICE_DEBIT", "MITRA_WALLET", "PLATFORM_REVENUE", platformFee, req.user.district, req.user.id, new Date().toISOString()
             );
 
             calculateFranchiseCommission(req.user.district, platformFee);
 
             db.prepare("INSERT INTO service_requests (id, serviceCode, mitraId, price, created_at) VALUES (?, ?, ?, ?, ?)").run(
-              Math.random().toString(36).substr(2, 9), serviceCode, req.user.id, platformFee, new Date().toISOString()
+              crypto.randomUUID(), serviceCode, req.user.id, platformFee, new Date().toISOString()
             );
             answer = `Successfully created a service request for ${serviceCode}. A platform fee of ₹${platformFee} has been deducted from your wallet.`;
           }
@@ -759,7 +801,7 @@ Answer the user's question concisely, professionally, and accurately based on th
       } else if (call.name === "applyForLoan") {
         const { applicantName, amount, purpose } = call.args as any;
         db.prepare("INSERT INTO loans (id, mitra_id, applicant, amount, purpose, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(
-          Math.random().toString(36).substr(2, 9), req.user.id, applicantName, amount, purpose, new Date().toISOString()
+          crypto.randomUUID(), req.user.id, applicantName, amount, purpose, new Date().toISOString()
         );
         answer = `Successfully submitted a loan application for ${applicantName} for ₹${amount} (${purpose}).`;
       }
