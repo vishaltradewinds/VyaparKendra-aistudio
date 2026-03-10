@@ -39,15 +39,32 @@ export default function MitraOnboarding() {
   }, []);
 
   const handleUpload = async (docType: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.post("/api/onboarding/upload", { docType }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchStatus();
-    } catch (err) {
-      alert("Upload failed");
-    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,application/pdf";
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result;
+        try {
+          const token = localStorage.getItem("token");
+          await axios.post("/api/onboarding/upload", { 
+            docType, 
+            fileData: base64 
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchStatus();
+        } catch (err) {
+          alert("Upload failed");
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   };
 
   const completeModule = async (moduleId: string) => {

@@ -116,6 +116,7 @@ db.exec(`
     mitraId TEXT,
     docType TEXT,
     status TEXT DEFAULT 'PENDING',
+    file_data TEXT,
     uploaded_at TEXT
   );
   CREATE TABLE IF NOT EXISTS wallets (
@@ -144,6 +145,15 @@ db.exec(`
     status TEXT DEFAULT 'CREATED',
     created_at TEXT,
     FOREIGN KEY(mitraId) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS service_request_documents (
+    id TEXT PRIMARY KEY,
+    requestId TEXT,
+    docType TEXT,
+    file_data TEXT,
+    status TEXT DEFAULT 'PENDING',
+    uploaded_at TEXT,
+    FOREIGN KEY(requestId) REFERENCES service_requests(id)
   );
   CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
@@ -180,6 +190,10 @@ try {
 } catch (e) {
   // Columns might already exist
 }
+
+try {
+  db.exec("ALTER TABLE mitra_documents ADD COLUMN file_data TEXT");
+} catch (e) {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS services (
@@ -453,12 +467,20 @@ app.get("/api/dashboard/admin", auth(["admin"]), (req: any, res) => {
   const ledger = db.prepare("SELECT * FROM ledger ORDER BY created_at DESC LIMIT 100").all();
   const services = db.prepare("SELECT * FROM services ORDER BY name ASC").all();
 
+  const requests = db.prepare(`
+    SELECT sr.*, u.name as mitraName, u.district 
+    FROM service_requests sr 
+    JOIN users u ON sr.mitraId = u.id 
+    ORDER BY sr.created_at DESC
+  `).all();
+
   res.json({ 
     totalUsers: (usersCount as any).count, 
     platformRevenue: (revenue as any).total || 0,
     users,
     ledger,
-    services
+    services,
+    requests
   });
 });
 
@@ -530,10 +552,10 @@ app.get("/api/onboarding/status", auth(["mitra"]), (req: any, res) => {
 });
 
 app.post("/api/onboarding/upload", auth(["mitra"]), (req: any, res) => {
-  const { docType } = req.body;
+  const { docType, fileData } = req.body;
   const id = crypto.randomUUID();
-  db.prepare("INSERT INTO mitra_documents (id, mitraId, docType, status, uploaded_at) VALUES (?, ?, ?, 'PENDING', ?)").run(
-    id, req.user.id, docType, new Date().toISOString()
+  db.prepare("INSERT INTO mitra_documents (id, mitraId, docType, status, file_data, uploaded_at) VALUES (?, ?, ?, 'PENDING', ?, ?)").run(
+    id, req.user.id, docType, fileData || null, new Date().toISOString()
   );
   
   // Check if all required docs are uploaded to advance step
@@ -649,6 +671,14 @@ app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
     WHERE u.district = ?
   `).get(req.user.district);
 
+  const requests = db.prepare(`
+    SELECT sr.*, u.name as mitraName 
+    FROM service_requests sr 
+    JOIN users u ON sr.mitraId = u.id 
+    WHERE u.district = ?
+    ORDER BY sr.created_at DESC
+  `).all(req.user.district);
+
   res.json({ 
     totalCommission: (commission as any).total || 0, 
     referralBonuses: (referralBonuses as any).total || 0,
@@ -656,6 +686,7 @@ app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
     referredMitras: (referredMitrasCount as any).count,
     mitras,
     recentCommissions,
+    requests,
     regionalPerformance: {
       totalRequests: (regionalPerformance as any).totalRequests || 0,
       totalVolume: (regionalPerformance as any).totalVolume || 0
@@ -665,14 +696,68 @@ app.get("/api/dashboard/franchise", auth(["franchise"]), (req: any, res) => {
   });
 });
 
-app.get("/api/dashboard/ca", auth(["ca"]), (req: any, res) => {
-  const requests = db.prepare("SELECT * FROM service_requests WHERE serviceCode LIKE '%TAX%' OR serviceCode LIKE '%GST%'").all();
-  res.json({ pendingTaxRequests: requests.length });
+app.get("/api/dashboard/ca", auth(["ca", "admin"]), (req: any, res) => {
+  const requests = db.prepare(`
+    SELECT sr.*, u.name as mitraName, u.district 
+    FROM service_requests sr
+    JOIN users u ON sr.mitraId = u.id
+    WHERE sr.serviceCode LIKE '%TAX%' OR sr.serviceCode LIKE '%GST%' OR sr.serviceCode LIKE '%COMPANY%'
+    ORDER BY sr.created_at DESC
+  `).all();
+  res.json({ requests });
 });
 
-app.get("/api/dashboard/compliance", auth(["compliance"]), (req: any, res) => {
-  const pendingKyc = db.prepare("SELECT COUNT(*) as count FROM users WHERE kyc_status = 'pending'").get();
-  res.json({ pendingKyc: (pendingKyc as any).count });
+app.get("/api/service-requests/:id/documents", auth(["ca", "admin", "mitra"]), (req: any, res) => {
+  const docs = db.prepare("SELECT * FROM service_request_documents WHERE requestId = ?").all(req.params.id);
+  res.json(docs);
+});
+
+app.post("/api/service-requests/:id/upload", auth(["mitra"]), (req: any, res) => {
+  const { docType, fileData } = req.body;
+  const requestId = req.params.id;
+  const id = crypto.randomUUID();
+  
+  db.prepare("INSERT INTO service_request_documents (id, requestId, docType, file_data, uploaded_at) VALUES (?, ?, ?, ?, ?)").run(
+    id, requestId, docType, fileData, new Date().toISOString()
+  );
+  
+  res.json({ message: "Document uploaded successfully", id });
+});
+
+app.post("/api/service-requests/:id/verify-document", auth(["ca", "admin"]), (req: any, res) => {
+  const { docId, status, reason } = req.body;
+  db.prepare("UPDATE service_request_documents SET status = ? WHERE id = ?").run(status, docId);
+  res.json({ message: "Document status updated" });
+});
+
+app.post("/api/service-requests/:id/update-status", auth(["ca", "admin"]), (req: any, res) => {
+  const { status } = req.body;
+  db.prepare("UPDATE service_requests SET status = ? WHERE id = ?").run(status, req.params.id);
+  res.json({ message: "Request status updated" });
+});
+
+app.get("/api/dashboard/compliance", auth(["compliance", "admin"]), (req: any, res) => {
+  const pendingKyc = db.prepare("SELECT id, name, email, district, onboarding_step FROM users WHERE kyc_status = 'pending'").all();
+  res.json({ pendingKyc });
+});
+
+app.get("/api/compliance/user-documents/:userId", auth(["compliance", "admin"]), (req: any, res) => {
+  const userId = req.params.userId;
+  const docs = db.prepare("SELECT * FROM mitra_documents WHERE mitraId = ?").all(userId);
+  res.json(docs);
+});
+
+app.post("/api/compliance/verify-kyc", auth(["compliance", "admin"]), (req: any, res) => {
+  const { userId, status, reason } = req.body; // status: 'approved' or 'rejected'
+  
+  db.prepare("UPDATE users SET kyc_status = ? WHERE id = ?").run(status, userId);
+  
+  // Log the action
+  db.prepare("INSERT INTO audit_logs (id, userId, action, role, created_at) VALUES (?, ?, ?, ?, ?)").run(
+    crypto.randomUUID(), req.user.id, `KYC_${status.toUpperCase()}: ${userId} ${reason || ''}`, req.user.role, new Date().toISOString()
+  );
+
+  res.json({ message: `KYC ${status} successfully` });
 });
 
 app.get("/api/dashboard/investor", auth(["investor"]), (req: any, res) => {

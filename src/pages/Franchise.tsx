@@ -17,7 +17,10 @@ export default function Franchise() {
   const [mitraSearch, setMitraSearch] = useState("");
   const [mitraStatusFilter, setMitraStatusFilter] = useState("all");
   const [mitraKycFilter, setMitraKycFilter] = useState("all");
+  const [requestStatusFilter, setRequestStatusFilter] = useState("all");
   const [commissionTypeFilter, setCommissionTypeFilter] = useState("all");
+
+  const [activeTab, setActiveTab] = useState<'mitras' | 'requests'>('mitras');
 
   const navigate = useNavigate();
 
@@ -93,6 +96,13 @@ export default function Franchise() {
     const matchesStatus = mitraStatusFilter === 'all' || mitra.status === mitraStatusFilter;
     const matchesKyc = mitraKycFilter === 'all' || mitra.kyc_status === mitraKycFilter;
     return matchesSearch && matchesStatus && matchesKyc;
+  }) || [];
+
+  const filteredRequests = data?.requests?.filter((req: any) => {
+    const matchesSearch = (req.mitraName?.toLowerCase() || '').includes(mitraSearch.toLowerCase()) || 
+                          (req.serviceCode?.toLowerCase() || '').includes(mitraSearch.toLowerCase());
+    const matchesStatus = requestStatusFilter === 'all' || req.status === requestStatusFilter;
+    return matchesSearch && matchesStatus;
   }) || [];
 
   const filteredCommissions = data?.recentCommissions?.filter((comm: any) => {
@@ -220,120 +230,216 @@ export default function Franchise() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Mitras List */}
+          {/* Main Content Area */}
           <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
-                  <span className="text-sm text-slate-500">{filteredMitras.length} Mitras</span>
-                </div>
-                <button 
-                  onClick={() => handleOpenModal()}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-                >
-                  <Plus size={16} /> Add Mitra
-                </button>
-              </div>
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input 
-                    type="text" 
-                    placeholder="Search by name or email..." 
-                    value={mitraSearch}
-                    onChange={(e) => setMitraSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
-                <select 
-                  value={mitraStatusFilter}
-                  onChange={(e) => setMitraStatusFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="deactivated">Deactivated</option>
-                </select>
-                <select 
-                  value={mitraKycFilter}
-                  onChange={(e) => setMitraKycFilter(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                >
-                  <option value="all">All KYC</option>
-                  <option value="verified">Verified</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
+            <div className="border-b border-slate-200 flex">
+              <button 
+                onClick={() => setActiveTab('mitras')}
+                className={`px-6 py-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'mitras' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              >
+                Mitra Network
+              </button>
+              <button 
+                onClick={() => setActiveTab('requests')}
+                className={`px-6 py-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'requests' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+              >
+                Service Requests
+              </button>
             </div>
-            <div className="flex-1 min-h-[400px]">
-              <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-6 p-4 font-medium border-b border-slate-200">
-                <div>Name</div>
-                <div>Email</div>
-                <div>KYC Status</div>
-                <div>Onboarding</div>
-                <div>Status</div>
-                <div className="text-right">Actions</div>
-              </div>
-              <div className="h-[400px]">
-                {filteredMitras.length > 0 ? (
-                  <List
-                    rowCount={filteredMitras.length}
-                    rowHeight={64}
-                    style={{ height: 400 }}
-                    rowComponent={({ index, style }) => {
-                      const mitra = filteredMitras[index];
-                      return (
-                        <div style={style} className="grid grid-cols-6 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
-                          <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
-                          <div className="text-slate-600 text-sm truncate pr-2">{mitra.email}</div>
-                          <div>
-                            {mitra.kyc_status === 'verified' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                <CheckCircle2 size={12} /> Verified
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
-                                <Clock size={12} /> Pending
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-slate-600 text-sm">
-                            Step {mitra.onboarding_step || 1}/3
-                          </div>
-                          <div>
-                            {mitra.status === 'deactivated' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-medium">
-                                <ShieldAlert size={12} /> Deactivated
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium">
-                                Active
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right flex items-center justify-end gap-2">
-                            <button onClick={() => handleOpenModal(mitra)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors">
-                              <Edit2 size={16} />
-                            </button>
-                            {mitra.status !== 'deactivated' && (
-                              <button onClick={() => handleDeactivate(mitra.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    }}
-                    rowProps={{}}
-                  />
-                ) : (
-                  <div className="p-8 text-center text-slate-500 italic">
-                    No Mitras registered in your district yet.
+
+            {activeTab === 'mitras' ? (
+              <>
+                <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Mitra Network</h2>
+                      <span className="text-sm text-slate-500">{filteredMitras.length} Mitras</span>
+                    </div>
+                    <button 
+                      onClick={() => handleOpenModal()}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                    >
+                      <Plus size={16} /> Add Mitra
+                    </button>
                   </div>
-                )}
-              </div>
-            </div>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="text" 
+                        placeholder="Search by name or email..." 
+                        value={mitraSearch}
+                        onChange={(e) => setMitraSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <select 
+                      value={mitraStatusFilter}
+                      onChange={(e) => setMitraStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="deactivated">Deactivated</option>
+                    </select>
+                    <select 
+                      value={mitraKycFilter}
+                      onChange={(e) => setMitraKycFilter(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                    >
+                      <option value="all">All KYC</option>
+                      <option value="verified">Verified</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-[400px]">
+                  <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-6 p-4 font-medium border-b border-slate-200">
+                    <div>Name</div>
+                    <div>Email</div>
+                    <div>KYC Status</div>
+                    <div>Onboarding</div>
+                    <div>Status</div>
+                    <div className="text-right">Actions</div>
+                  </div>
+                  <div className="h-[400px]">
+                    {filteredMitras.length > 0 ? (
+                      <List
+                        rowCount={filteredMitras.length}
+                        rowHeight={64}
+                        style={{ height: 400 }}
+                        rowComponent={({ index, style }) => {
+                          const mitra = filteredMitras[index];
+                          return (
+                            <div style={style} className="grid grid-cols-6 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                              <div className="font-medium text-slate-900 truncate pr-2">{mitra.name || 'Unnamed'}</div>
+                              <div className="text-slate-600 text-sm truncate pr-2">{mitra.email}</div>
+                              <div>
+                                {mitra.kyc_status === 'verified' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <CheckCircle2 size={12} /> Verified
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
+                                    <Clock size={12} /> Pending
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-slate-600 text-sm">
+                                Step {mitra.onboarding_step || 1}/3
+                              </div>
+                              <div>
+                                {mitra.status === 'deactivated' ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-medium">
+                                    <ShieldAlert size={12} /> Deactivated
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right flex items-center justify-end gap-2">
+                                <button onClick={() => handleOpenModal(mitra)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors">
+                                  <Edit2 size={16} />
+                                </button>
+                                {mitra.status !== 'deactivated' && (
+                                  <button onClick={() => handleDeactivate(mitra.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }}
+                        rowProps={{}}
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-slate-500 italic">
+                        No Mitras registered in your district yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-6 border-b border-slate-200 flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">Regional Service Requests</h2>
+                      <span className="text-sm text-slate-500">{filteredRequests.length} Requests</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="text" 
+                        placeholder="Search by Mitra or Service..." 
+                        value={mitraSearch}
+                        onChange={(e) => setMitraSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <select 
+                      value={requestStatusFilter}
+                      onChange={(e) => setRequestStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="CREATED">Created</option>
+                      <option value="PROCESSING">Processing</option>
+                      <option value="COMPLETED">Completed</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-[400px]">
+                  <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-5 p-4 font-medium border-b border-slate-200">
+                    <div>Service</div>
+                    <div>Mitra</div>
+                    <div>Status</div>
+                    <div>Price</div>
+                    <div className="text-right">Date</div>
+                  </div>
+                  <div className="h-[400px]">
+                    {filteredRequests.length > 0 ? (
+                      <List
+                        rowCount={filteredRequests.length}
+                        rowHeight={64}
+                        style={{ height: 400 }}
+                        rowComponent={({ index, style }) => {
+                          const req = filteredRequests[index];
+                          return (
+                            <div style={style} className="grid grid-cols-5 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                              <div className="font-bold text-slate-900 truncate pr-2">{req.serviceCode}</div>
+                              <div className="text-slate-600 text-sm truncate pr-2">{req.mitraName}</div>
+                              <div>
+                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  req.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700' : 
+                                  req.status === 'PROCESSING' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {req.status}
+                                </span>
+                              </div>
+                              <div className="text-slate-700 font-medium">₹{req.price}</div>
+                              <div className="text-right text-slate-500 text-xs">
+                                {new Date(req.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                          );
+                        }}
+                        rowProps={{}}
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-slate-500 italic">
+                        No service requests found in your district.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Recent Commissions */}

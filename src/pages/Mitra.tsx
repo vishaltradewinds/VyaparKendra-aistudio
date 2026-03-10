@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter, UserCircle } from "lucide-react";
+import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter, UserCircle, Clock, XCircle, Upload, FileText, CheckCircle2, Eye } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { UserProfile } from "../components/UserProfile";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function Mitra() {
   const { t } = useTranslation();
@@ -18,6 +19,11 @@ export default function Mitra() {
   ]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   
+  // Document Upload Modal
+  const [selectedRequestForUpload, setSelectedRequestForUpload] = useState<any>(null);
+  const [requestDocs, setRequestDocs] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
   // Filters
   const [requestSearch, setRequestSearch] = useState("");
   const [requestStatusFilter, setRequestStatusFilter] = useState("all");
@@ -42,6 +48,50 @@ export default function Mitra() {
   useEffect(() => {
     fetchData();
   }, [navigate]);
+
+  const fetchRequestDocs = async (requestId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`/api/service-requests/${requestId}/documents`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRequestDocs(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUploadDoc = async (docType: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*,application/pdf";
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result;
+        try {
+          const token = localStorage.getItem("token");
+          await axios.post(`/api/service-requests/${selectedRequestForUpload.id}/upload`, { 
+            docType, 
+            fileData: base64 
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchRequestDocs(selectedRequestForUpload.id);
+        } catch (err) {
+          alert("Upload failed");
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
 
   const handleAiQuery = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +157,32 @@ export default function Mitra() {
           My Profile
         </button>
       </div>
+
+      {data.kyc_status === 'pending' && (
+        <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-800">
+          <Clock className="shrink-0" size={20} />
+          <div>
+            <p className="font-bold text-sm">KYC Verification Pending</p>
+            <p className="text-xs">Your documents are under review. Some features may be restricted until approval.</p>
+          </div>
+        </div>
+      )}
+
+      {data.kyc_status === 'rejected' && (
+        <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3 text-rose-800">
+          <XCircle className="shrink-0" size={20} />
+          <div>
+            <p className="font-bold text-sm">KYC Verification Rejected</p>
+            <p className="text-xs">Please contact support or re-upload your documents in the onboarding section.</p>
+            <button 
+              onClick={() => navigate("/onboarding")}
+              className="mt-2 text-xs font-bold underline"
+            >
+              Go to Onboarding
+            </button>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'profile' ? (
         <UserProfile />
@@ -188,11 +264,26 @@ export default function Mitra() {
                       <div style={style} className="flex justify-between items-center border-b border-slate-100 pb-2 px-1">
                         <div>
                           <p className="font-medium text-slate-900">{req.serviceCode}</p>
-                          <p className="text-xs text-slate-500">{new Date(req.created_at).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-slate-500">{new Date(req.created_at).toLocaleDateString()}</p>
                         </div>
-                        <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">
-                          {req.status}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            req.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700' : 
+                            req.status === 'PROCESSING' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                            {req.status}
+                          </span>
+                          <button 
+                            onClick={() => {
+                              setSelectedRequestForUpload(req);
+                              fetchRequestDocs(req.id);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Upload Documents"
+                          >
+                            <Upload size={16} />
+                          </button>
+                        </div>
                       </div>
                     );
                   }}
@@ -203,6 +294,97 @@ export default function Mitra() {
               )}
             </div>
           </div>
+
+          <AnimatePresence>
+            {selectedRequestForUpload && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden"
+                >
+                  <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Service Documents</h2>
+                      <p className="text-xs text-slate-500">Request: {selectedRequestForUpload.serviceCode}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedRequestForUpload(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                      <XCircle size={20} className="text-slate-400" />
+                    </button>
+                  </div>
+                  
+                  <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-1 gap-4">
+                      {['APPLICATION_FORM', 'ID_PROOF', 'ADDRESS_PROOF', 'BUSINESS_PROOF', 'OTHER'].map(type => {
+                        const doc = requestDocs.find(d => d.docType === type);
+                        return (
+                          <div key={type} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{type.replace('_', ' ')}</p>
+                              {doc ? (
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    doc.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
+                                    doc.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {doc.status}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">{new Date(doc.uploaded_at).toLocaleDateString()}</span>
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-slate-400">Not uploaded yet</p>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              {doc && (
+                                <button 
+                                  onClick={() => {
+                                    const win = window.open();
+                                    win?.document.write(`<img src="${doc.file_data}" style="max-width: 100%;" />`);
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleUploadDoc(type)}
+                                disabled={isUploading}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold hover:bg-slate-100 transition-all disabled:opacity-50"
+                              >
+                                {isUploading ? '...' : <><Upload size={14} /> {doc ? 'Replace' : 'Upload'}</>}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex gap-3">
+                      <FileText className="text-indigo-600 shrink-0" size={20} />
+                      <p className="text-xs text-indigo-800">
+                        Please upload all required documents to avoid processing delays. Our team will review them within 24-48 hours.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-slate-50 border-t border-slate-200">
+                    <button 
+                      onClick={() => setSelectedRequestForUpload(null)}
+                      className="w-full py-3 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-100 transition-all"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-6">

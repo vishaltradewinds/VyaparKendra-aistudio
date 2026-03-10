@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
-import { Search, Filter, Users, IndianRupee, Activity, ShieldAlert, CheckCircle2, Clock, Settings, Edit2, Trash2, Plus } from "lucide-react";
+import { Search, Filter, Users, IndianRupee, Activity, ShieldAlert, CheckCircle2, Clock, Settings, Edit2, Trash2, Plus, Briefcase } from "lucide-react";
 import { List } from "react-window";
 
 export default function Admin() {
@@ -17,7 +17,7 @@ export default function Admin() {
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState("all");
   
   // Services
-  const [activeTab, setActiveTab] = useState<'users' | 'ledger' | 'services'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'ledger' | 'services' | 'requests'>('users');
   const [editingService, setEditingService] = useState<any>(null);
   const [isAddingService, setIsAddingService] = useState(false);
   const [serviceForm, setServiceForm] = useState({ name: '', category: '', price: 0, commission: 0, description: '', processing_time: '' });
@@ -100,6 +100,16 @@ export default function Admin() {
           <h2 className="text-slate-500 text-sm font-medium mb-2">Platform Revenue</h2>
           <p className="text-4xl font-bold text-emerald-600">₹{data.platformRevenue}</p>
         </div>
+        <div 
+          onClick={() => navigate("/compliance")}
+          className="bg-indigo-600 p-6 rounded-xl shadow-sm border border-indigo-500 cursor-pointer hover:bg-indigo-700 transition-colors flex items-center justify-between text-white md:col-span-2"
+        >
+          <div>
+            <h2 className="text-white/80 text-sm font-medium mb-1">Compliance & KYC</h2>
+            <p className="text-2xl font-bold">Review Pending Applications</p>
+          </div>
+          <ShieldAlert size={32} className="text-white/50" />
+        </div>
       </div>
 
       <div className="mb-6 flex gap-4 border-b border-slate-200">
@@ -120,6 +130,12 @@ export default function Admin() {
           className={`pb-3 px-4 text-sm font-medium transition-colors ${activeTab === 'services' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           Service Pricing
+        </button>
+        <button 
+          onClick={() => setActiveTab('requests')}
+          className={`pb-3 px-4 text-sm font-medium transition-colors ${activeTab === 'requests' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Service Requests
         </button>
       </div>
 
@@ -410,6 +426,63 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Briefcase size={20} className="text-indigo-600" />
+              All Service Requests
+            </h2>
+            <span className="text-sm text-slate-500">{data.requests.length} Requests</span>
+          </div>
+          <div className="flex-1 min-h-[400px]">
+            <div className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider grid grid-cols-5 p-4 font-medium border-b border-slate-200">
+              <div>Service</div>
+              <div>Mitra / District</div>
+              <div>Status</div>
+              <div>Price</div>
+              <div className="text-right">Date</div>
+            </div>
+            <div className="h-[400px]">
+              {data.requests.length > 0 ? (
+                <List
+                  rowCount={data.requests.length}
+                  rowHeight={64}
+                  style={{ height: 400 }}
+                  rowComponent={({ index, style }) => {
+                    const req = data.requests[index];
+                    return (
+                      <div style={style} className="grid grid-cols-5 items-center p-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
+                        <div className="font-bold text-slate-900 truncate pr-2">{req.serviceCode}</div>
+                        <div className="truncate pr-2">
+                          <p className="text-sm font-medium text-slate-700 truncate">{req.mitraName}</p>
+                          <p className="text-xs text-slate-500 truncate">{req.district}</p>
+                        </div>
+                        <div>
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            req.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700' : 
+                            req.status === 'PROCESSING' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                            {req.status}
+                          </span>
+                        </div>
+                        <div className="text-slate-700 font-medium">₹{req.price}</div>
+                        <div className="text-right text-slate-500 text-xs">
+                          {new Date(req.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    );
+                  }}
+                  rowProps={{}}
+                />
+              ) : (
+                <div className="p-8 text-center text-slate-500 italic">No service requests found.</div>
+              )}
+            </div>
           </div>
         </div>
       )}
