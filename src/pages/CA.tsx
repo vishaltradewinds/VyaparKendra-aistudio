@@ -24,6 +24,7 @@ export default function CA() {
   const [requestDocs, setRequestDocs] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
 
   const fetchData = async () => {
@@ -93,6 +94,42 @@ export default function CA() {
     } catch (err) {
       alert("Status update failed");
     }
+  };
+
+  const handleUploadResultDoc = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,.pdf';
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const token = localStorage.getItem("token");
+          await axios.post(`/api/service-requests/${selectedRequest.id}/upload`, {
+            docType: 'PROCESSED_DOCUMENT',
+            fileData: event.target?.result
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          // Refresh docs
+          const res = await axios.get(`/api/service-requests/${selectedRequest.id}/documents`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setRequestDocs(res.data);
+        } catch (err) {
+          alert("Upload failed");
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   };
 
   if (!data) return (
@@ -344,6 +381,18 @@ export default function CA() {
                       >
                         <CheckSquare size={18} /> Mark as Completed
                       </button>
+                      <div className="pt-4 border-t border-slate-200 mt-4">
+                        <button 
+                          onClick={handleUploadResultDoc}
+                          disabled={isUploading}
+                          className="w-full py-3 bg-white border border-indigo-200 text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <FileText size={18} /> {isUploading ? 'Uploading...' : 'Upload Result Document'}
+                        </button>
+                        <p className="text-[10px] text-slate-500 text-center mt-2">
+                          Upload the final processed document (e.g., PAN Card, Certificate) for the Mitra to download.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

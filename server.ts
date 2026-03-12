@@ -712,7 +712,7 @@ app.get("/api/service-requests/:id/documents", auth(["ca", "admin", "mitra"]), (
   res.json(docs);
 });
 
-app.post("/api/service-requests/:id/upload", auth(["mitra"]), (req: any, res) => {
+app.post("/api/service-requests/:id/upload", auth(["mitra", "ca", "admin"]), (req: any, res) => {
   const { docType, fileData } = req.body;
   const requestId = req.params.id;
   const id = crypto.randomUUID();

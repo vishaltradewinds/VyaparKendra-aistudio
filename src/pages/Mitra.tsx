@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter, UserCircle, Clock, XCircle, Upload, FileText, CheckCircle2, Eye } from "lucide-react";
+import { Bot, Send, IndianRupee, History, Calendar, TrendingUp, Search, Filter, UserCircle, Clock, XCircle, Upload, FileText, CheckCircle2, Eye, Download } from "lucide-react";
 import { List } from "react-window";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
@@ -364,6 +364,39 @@ export default function Mitra() {
                         );
                       })}
                     </div>
+
+                    {requestDocs.find(d => d.docType === 'PROCESSED_DOCUMENT') && (
+                      <div className="mt-6">
+                        <h3 className="text-sm font-bold text-slate-900 mb-3">Result Document</h3>
+                        <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                              <CheckCircle2 size={20} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-emerald-900">Processed Document Available</p>
+                              <p className="text-[10px] text-emerald-700">Your service request has been completed.</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              const doc = requestDocs.find(d => d.docType === 'PROCESSED_DOCUMENT');
+                              if (doc?.file_data) {
+                                const link = document.createElement('a');
+                                link.href = doc.file_data;
+                                link.download = `${selectedRequestForUpload.serviceCode}_Result.pdf`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-200"
+                          >
+                            <Download size={14} /> Download
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex gap-3">
                       <FileText className="text-indigo-600 shrink-0" size={20} />
